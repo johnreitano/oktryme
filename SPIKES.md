@@ -49,6 +49,8 @@ npx wrangler deploy --dry-run --outdir dist   # bundles for the Workers runtime
 
 ## Resume here (single pick-up point after a context clear)
 
+_Project conventions (secrets, git workflow, dev/test commands) live in `CLAUDE.md`, auto-loaded each session. This section is current build **state** + next actions._
+
 **Done & verified:** V2a (registrant contact), V3 (Stripe→activate, live test mode), V4 (render/edit), V5 (Resend→inbox). **Remaining: V1 + V2 only.**
 
 **Environment already wired (durable, on disk):**
