@@ -392,7 +392,7 @@ Cheap end-to-end proofs before pipeline build:
 - [x] **V2a — Private registrant contact info (done 2026-06-24):** Cloudflare registrant/ICANN contact updated to the business identity — role email, business/VoIP phone, non-residential address — with WHOIS redaction on, before registering customer domains at scale (§5a registrant contact policy).
 - [ ] **V3 — Stripe → provisioning:** Checkout subscription → webhook → status flip → domain provision, end-to-end on a test card.
 - [ ] **V4 — Render + edit loop:** Worker renders a real `business.json`; an edit to the JSON re-renders instantly (preview = live engine).
-- [ ] **V5 — Form email deliverability:** contact-form submission lands in an inbox (not spam) with correct SPF/DKIM. **Outbound via Resend** (verify `oktryme.com` + DKIM, send `leads@oktryme.com`); **inbound role addresses via Cloudflare Email Routing** (free forward to a real inbox) — the two are separate systems (§5a D).
+- [x] **V5 — Form email deliverability (done 2026-06-24):** contact-form POST → Worker → Resend → **landed in Gmail inbox (not spam)** from `leads@oktryme.com` (verified domain, DKIM/SPF). **Outbound via Resend**; **inbound role addresses via Cloudflare Email Routing** — separate systems (§5a D).
 
 ---
 
@@ -403,10 +403,10 @@ Cheap end-to-end proofs before pipeline build:
 | Self-hosted static rendering covers service-business needs (lead-gen + form) | ✅ Yes (no cart/booking in MVP) |
 | Workers Custom Domain attaches our-account domains + auto DNS/SSL programmatically | ⏳ Verify V1 |
 | New-domain registration automatable via Cloudflare Registrar API (~$10/yr at cost) | ✅ Now possible (beta, Apr 2026) — confirm TLDs + renewal path (V2) |
-| Stripe subscription + webhook drives activation/provisioning | ⏳ Verify V3 |
+| Stripe subscription + webhook drives activation/provisioning | ✅ Verified live (test mode, 2026-06-24) |
 | Preview & live share one renderer (no drift) | ✅ By design — confirm V4 |
 | 100% of both tiers retained (no platform rev share) | ✅ Yes |
-| Contact-form email deliverability | ⏳ Verify V5 |
+| Contact-form email deliverability | ✅ Verified live (Resend → inbox, 2026-06-24) |
 | Self-serve AI chat editor edits `business.json` safely | ⏳ Build Phase 6 (schema-constrained, preview/undo) |
 | Two-tier upsell ($49→$99) raises ARPU + funds edit labor | ✅ By design (take-rate to validate — §7 #1) |
 
