@@ -66,6 +66,8 @@ export interface BusinessProfile {
   category: string;
   address: Address;
   phone: string;
+  /** Business contact email for lead notifications (captured at conversion). */
+  email?: string;
   hours: Hours;
   /** Short factual description (from scraped public data). */
   description: string;

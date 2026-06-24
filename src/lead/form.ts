@@ -1,18 +1,22 @@
 import type { Store } from "../store.js";
 
-export interface LeadEmailSender {
-  /** Send a lead notification to the business. Real impl: Resend/Postmark (V5). */
-  send(args: {
-    toBusinessName: string;
-    fromHandle: string;
-    lead: { name: string; phone: string; message: string };
-  }): Promise<void>;
+export interface LeadEmailArgs {
+  toBusinessName: string;
+  /** Business inbox to notify; falls back to ops inbox if absent. */
+  toEmail?: string;
+  fromHandle: string;
+  lead: { name: string; phone: string; message: string };
 }
 
-/** No-op sender for spikes without an email provider configured (V5 wires the real one). */
+export interface LeadEmailSender {
+  /** Send a lead notification to the business. Real impl: Resend (V5). */
+  send(args: LeadEmailArgs): Promise<void>;
+}
+
+/** No-op sender for spikes without an email provider configured. */
 export class LogSender implements LeadEmailSender {
-  sent: unknown[] = [];
-  async send(args: Parameters<LeadEmailSender["send"]>[0]): Promise<void> {
+  sent: LeadEmailArgs[] = [];
+  async send(args: LeadEmailArgs): Promise<void> {
     this.sent.push(args);
   }
 }
@@ -36,6 +40,7 @@ export async function handleLead(
 
   await sender.send({
     toBusinessName: rec.business.name,
+    toEmail: rec.business.email,
     fromHandle: handle,
     lead: { name, phone, message },
   });

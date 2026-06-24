@@ -389,6 +389,7 @@ Cheap end-to-end proofs before pipeline build:
 
 - [ ] **V1 — Domain → live automation:** register a test domain via the **Cloudflare Registrar API** → attach as a **Workers Custom Domain** (auto DNS + edge cert) → SSL active, Worker serves it — fully unattended, minutes not hours. (Confirm Registrar domains land as a zone in our account and Workers Custom Domains can be set via API.)
 - [ ] **V2 — Cloudflare Registrar API fit:** confirm the beta API registers our target TLDs (.com etc.) unattended at cost, and decide the **year-2 renewal** path (dashboard now vs. API when it lands). Keep a third-party registrar API as fallback.
+- [ ] **V2a — Private registrant contact info:** update Cloudflare domain registrations with private contact info — role email, business/VoIP phone, and non-residential business address — before registering customer domains at scale.
 - [ ] **V3 — Stripe → provisioning:** Checkout subscription → webhook → status flip → domain provision, end-to-end on a test card.
 - [ ] **V4 — Render + edit loop:** Worker renders a real `business.json`; an edit to the JSON re-renders instantly (preview = live engine).
 - [ ] **V5 — Form email deliverability:** contact-form submission lands in an inbox (not spam) with correct SPF/DKIM. **Outbound via Resend** (verify `oktryme.com` + DKIM, send `leads@oktryme.com`); **inbound role addresses via Cloudflare Email Routing** (free forward to a real inbox) — the two are separate systems (§5a D).

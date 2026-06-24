@@ -1,6 +1,20 @@
-# Copy to .dev.vars (gitignored) for `wrangler dev`. Test-mode values for V3.
+# Copy to .dev.vars (gitignored) for `wrangler dev`.
+
+# --- V3: Stripe (test mode) ---
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
 PRICE_SELF_SERVE=price_xxx_49
 PRICE_DONE_FOR_YOU=price_xxx_99
+
+# --- V1: Cloudflare provisioning (when set, real provisioning replaces the stub) ---
+CF_ACCOUNT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+CF_API_TOKEN=xxx              # Workers + DNS + Zone + Registrar write (all-zones)
+CF_WORKER_SERVICE=maps-website-builder
+# CF_ENVIRONMENT=production    # optional
+
+# --- V5: Resend (outbound lead email) ---
+RESEND_API_KEY=re_xxx
+LEADS_FROM=OK Try Me <leads@oktryme.com>
+OPS_FALLBACK_EMAIL=ops@oktryme.com
+
 PREVIEW_HOST=oktryme.com

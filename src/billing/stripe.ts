@@ -77,6 +77,53 @@ export interface PriceMap {
   doneForYou: string;
 }
 
+type FetchLike = (url: string, init?: RequestInit) => Promise<Response>;
+
+export interface CheckoutParams {
+  handle: string;
+  priceId: string;
+  successUrl: string;
+  cancelUrl: string;
+  customerEmail?: string;
+}
+
+/**
+ * Create a Stripe Checkout subscription session for the convert flow. Carries
+ * the `handle` as `client_reference_id` + metadata so the webhook can resolve
+ * it (handleStripeEvent). Returns the hosted Checkout URL to redirect to.
+ */
+export async function createCheckoutSession(
+  params: CheckoutParams,
+  secretKey: string,
+  fetchImpl?: FetchLike,
+): Promise<{ url: string }> {
+  const doFetch = fetchImpl ?? ((u: string, i?: RequestInit) => fetch(u, i));
+  const form = new URLSearchParams();
+  form.set("mode", "subscription");
+  form.set("line_items[0][price]", params.priceId);
+  form.set("line_items[0][quantity]", "1");
+  form.set("client_reference_id", params.handle);
+  form.set("metadata[handle]", params.handle);
+  form.set("subscription_data[metadata][handle]", params.handle);
+  form.set("success_url", params.successUrl);
+  form.set("cancel_url", params.cancelUrl);
+  if (params.customerEmail) form.set("customer_email", params.customerEmail);
+
+  const res = await doFetch("https://api.stripe.com/v1/checkout/sessions", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${secretKey}`,
+      "content-type": "application/x-www-form-urlencoded",
+    },
+    body: form.toString(),
+  });
+  const json = (await res.json().catch(() => ({}))) as { url?: string; error?: unknown };
+  if (!res.ok || !json.url) {
+    throw new Error(`Stripe Checkout session creation failed (${res.status})`);
+  }
+  return { url: json.url };
+}
+
 /** Map a Stripe price id to our plan tier. */
 export function planForPrice(priceId: string | undefined, prices: PriceMap): Plan {
   if (priceId && priceId === prices.doneForYou) return "done_for_you";
