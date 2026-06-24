@@ -1,0 +1,6 @@
+# Copy to .dev.vars (gitignored) for `wrangler dev`. Test-mode values for V3.
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+PRICE_SELF_SERVE=price_xxx_49
+PRICE_DONE_FOR_YOU=price_xxx_99
+PREVIEW_HOST=multiply.app

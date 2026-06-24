@@ -1,0 +1,22 @@
+# Cloudflare Worker config — Phase 0 spikes (V3/V4).
+# The single Worker renders preview + live, serves forms/QR, and handles Stripe webhooks.
+name = "maps-website-builder"
+main = "src/index.ts"
+compatibility_date = "2024-09-01"
+
+# Host that serves preview sites and the {handle}.<preview-host> live fallback.
+[vars]
+PREVIEW_HOST = "multiply.app"
+
+# Canonical business.json store. Create with:
+#   wrangler kv namespace create BUSINESS_KV
+# then paste the returned id below.
+[[kv_namespaces]]
+binding = "BUSINESS_KV"
+id = "REPLACE_WITH_kv_namespace_create_OUTPUT"
+
+# Secrets (set via `wrangler secret put <NAME>` — never commit):
+#   STRIPE_SECRET_KEY        sk_test_... (test mode for V3)
+#   STRIPE_WEBHOOK_SECRET    whsec_...
+#   PRICE_SELF_SERVE         price_... ($49 tier)
+#   PRICE_DONE_FOR_YOU       price_... ($99 tier)
