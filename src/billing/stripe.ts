@@ -102,7 +102,7 @@ export interface HandleEventDeps {
   store: Store;
   provisioner: Provisioner;
   prices: PriceMap;
-  /** Fallback preview host for backup domain candidates, e.g. "multiply.app". */
+  /** Fallback preview host for backup domain candidates, e.g. "oktryme.com". */
   previewHost: string;
 }
 

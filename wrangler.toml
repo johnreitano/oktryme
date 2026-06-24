@@ -6,7 +6,7 @@ compatibility_date = "2024-09-01"
 
 # Host that serves preview sites and the {handle}.<preview-host> live fallback.
 [vars]
-PREVIEW_HOST = "multiply.app"
+PREVIEW_HOST = "oktryme.com"
 
 # Canonical business.json store. Create with:
 #   wrangler kv namespace create BUSINESS_KV

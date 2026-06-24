@@ -85,7 +85,7 @@ describe("V3: checkout.session.completed → activate + provision", () => {
       store,
       provisioner,
       prices: PRICES,
-      previewHost: "multiply.app",
+      previewHost: "oktryme.com",
     });
     expect(res).toMatchObject({ handled: true, action: "activated", handle: "joes-auto" });
 
@@ -102,7 +102,7 @@ describe("V3: checkout.session.completed → activate + provision", () => {
 
   it("is idempotent on webhook re-delivery (no double provision)", async () => {
     const { store, provisioner } = await setup();
-    const deps = { store, provisioner, prices: PRICES, previewHost: "multiply.app" };
+    const deps = { store, provisioner, prices: PRICES, previewHost: "oktryme.com" };
     await handleStripeEvent(checkoutEvent(), deps);
     await handleStripeEvent(checkoutEvent(), deps);
     expect(provisioner.registered.filter((d) => d === "joesauto.com")).toHaveLength(1);
@@ -116,7 +116,7 @@ describe("V3: checkout.session.completed → activate + provision", () => {
       store,
       provisioner,
       prices: PRICES,
-      previewHost: "multiply.app",
+      previewHost: "oktryme.com",
     });
     const rec = await store.get("joes-auto");
     expect(rec?.domain).toBe("joesauto.net"); // first backup
@@ -126,7 +126,7 @@ describe("V3: checkout.session.completed → activate + provision", () => {
     const { store, provisioner } = await setup();
     const res = await handleStripeEvent(
       checkoutEvent({ client_reference_id: "nobody", metadata: { handle: "nobody" } }),
-      { store, provisioner, prices: PRICES, previewHost: "multiply.app" },
+      { store, provisioner, prices: PRICES, previewHost: "oktryme.com" },
     );
     expect(res.handled).toBe(false);
   });
@@ -141,7 +141,7 @@ describe("V3: plan mapping + dunning transitions", () => {
 
   it("payment_failed → past_due; subscription deleted → canceled", async () => {
     const { store, provisioner } = await setup();
-    const deps = { store, provisioner, prices: PRICES, previewHost: "multiply.app" };
+    const deps = { store, provisioner, prices: PRICES, previewHost: "oktryme.com" };
     await handleStripeEvent(checkoutEvent(), deps);
 
     await handleStripeEvent(
