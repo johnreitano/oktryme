@@ -13,7 +13,7 @@ _Status: planning phase — not yet in build. This document consolidates the res
 **Glossary (load-bearing terms used throughout):**
 - **`handle`** — our internal slug for a business (e.g. `joes-auto`); the primary key everywhere (data store, preview URL, QR, mail status, Stripe linkage).
 - **`business.json`** — the canonical per-business record (scraped facts + AI copy). Single source of truth; the renderer turns it into a site, and edits just mutate it.
-- **preview vs live** — *preview* = generated-but-unpaid site on our domain (`multiply.app/p/{handle}`, yellow banner + CTA); *live* = paid site on the customer's own domain (banner hidden). Same renderer, two entry points.
+- **preview vs live** — *preview* = generated-but-unpaid site on our domain (`oktryme.com/p/{handle}`, yellow banner + CTA); *live* = paid site on the customer's own domain (banner hidden). Same renderer, two entry points.
 - **allowlist** — the curated set of worthwhile service-business categories from Step-0 discovery (§1A).
 
 **Out of scope (MVP) — explicitly deferred:**
@@ -24,8 +24,7 @@ _Status: planning phase — not yet in build. This document consolidates the res
 - Any use of **photos scraped from Google Maps** (see §1A / §11) — imagery comes from category stock or customer upload only.
 
 **Kill criteria (stop / rethink if):**
-- Fully-loaded CAC > **~$230** (LTV:CAC < 5:1 at the ~$1,160 LTV) after the validation test.
-- **Net postcard→paid < ~0.30% sustained** (≈ fully-loaded CAC > ~$232, LTV:CAC < 5:1). This single net-conversion line — *not* separate scan/close cutoffs — is the kill floor, because scan and close trade off and don't enter the economics symmetrically. The §7 #8 go/no-go tripwire (scan ≥~7%) sits deliberately *above* this line to absorb the noisy early close-rate estimate.
+- **Net postcard→paid < ~0.30% sustained** (≈ fully-loaded CAC > **~$230**, LTV:CAC < 5:1 at the ~$1,160 LTV). This single net-conversion line — *not* separate scan/close cutoffs — is the kill floor, because scan and close trade off and don't enter the economics symmetrically. The §7 #8 go/no-go tripwire (scan ≥~7%) sits deliberately *above* this line to absorb the noisy early close-rate estimate.
 - Steady-state churn materially worse than the 8/6/4% schedule (blended LTV falling below ~$800).
 - Stripe **dispute rate trending toward ~1%** (merchant-account risk — §11).
 
@@ -66,7 +65,7 @@ The customer-acquisition engine. **Step 0 is a one-time setup; steps 1–5 are t
    - **Unambiguous business type.** Discard records where the service type isn't clear from the Outscraper fields — clean data in → believable AI copy out.
    Then classify the survivors by service type.
 2. **Batch & map.** Take a batch (start: **1,000 businesses**). Generate the `business.json` for the batch and load it into the data store (keyed by `handle`).
-3. **Outreach (direct-mail postcard + QR).** Mail each business a personalized **4×6 postcard** bearing its business name and a **unique QR code** that opens its **preview site** (`multiply.app/p/{handle}`). Hook: *"We already built your website — scan to see it live."* Direct mail carries **no TCPA/CAN-SPAM exposure** and **~100% deliverability** (no carrier filtering); the tradeoff is per-piece cost (see §1B). Sent in automated batches via a print-and-mail API (Lob / PostGrid).
+3. **Outreach (direct-mail postcard + QR).** Mail each business a personalized **4×6 postcard** bearing its business name and a **unique QR code** that opens its **preview site** (`oktryme.com/p/{handle}`). Hook: *"We already built your website — scan to see it live."* Direct mail carries **no TCPA/CAN-SPAM exposure** and **~100% deliverability** (no carrier filtering); the tradeoff is per-piece cost (see §1B). Sent in automated batches via a print-and-mail API (Lob / PostGrid).
 4. **Call + convert.** **Every scan triggers a phone call.** The scan notifies us in real time; we call the warm prospect (number from Outscraper) who is *literally looking at their own finished website* and walk them to **Stripe Checkout ($49/mo self-serve, or $99 done-for-you)**. The human call is what lifts conversion from a passive web rate to **10%+** (see §1B) — it's the core of the funnel, not an afterthought. On payment, we auto-provision the domain and flip the site live.
 5. **Retain & expand.** Customers edit via the **self-serve AI chat editor** ($49 tier) or hand changes to us ($99 done-for-you); the owned domain + done-for-you option drive stickiness. Upsell self-serve users to $99, and later to extras (more pages, booking, local SEO).
 
@@ -189,9 +188,9 @@ Both Lob and PostGrid are API-first with Handlebars templates, merge variables, 
 - **Back:** 2–3 lines of value, the human-readable short URL (fallback for non-scanners), and a P.S. with the offer. Merge fields: `{{business_name}}`, `{{category}}`, `{{city}}`, `{{qr_url}}`, `{{preview_short_url}}`.
 
 ### QR code → preview (with scan tracking)
-- QR encodes a **branded short link on our Worker**: `https://multiply.app/r/{handle}`. Reasons: cleaner card, lets us **count scans**, and decouples the card from the underlying preview path.
-- Worker route **`GET /r/{handle}`** → logs the scan (handle, timestamp, UA) → **302 redirects** to the preview `multiply.app/p/{handle}`.
-- Worker route **`GET /qr/{handle}.png`** → renders the QR image for that handle's short link on the fly (template just references `{{qr_url}}` = `https://multiply.app/qr/{handle}.png`). No pre-generating/hosting thousands of images.
+- QR encodes a **branded short link on our Worker**: `https://oktryme.com/r/{handle}`. Reasons: cleaner card, lets us **count scans**, and decouples the card from the underlying preview path.
+- Worker route **`GET /r/{handle}`** → logs the scan (handle, timestamp, UA) → **302 redirects** to the preview `oktryme.com/p/{handle}`.
+- Worker route **`GET /qr/{handle}.png`** → renders the QR image for that handle's short link on the fly (template just references `{{qr_url}}` = `https://oktryme.com/qr/{handle}.png`). No pre-generating/hosting thousands of images.
 - **Scan = the conversion event** for this channel; ties straight through to the Stripe checkout + provisioning flow (§5).
 
 ### Batch send flow
@@ -219,7 +218,7 @@ The whole lifecycle is a status flag on a `handle` plus a Stripe subscription.
 
 | State | Meaning | URL | Banner |
 |---|---|---|---|
-| **preview** | Generated, not paid | `multiply.app/p/{handle}` | Yellow "PREVIEW" + "Make This My Website" CTA |
+| **preview** | Generated, not paid | `oktryme.com/p/{handle}` | Yellow "PREVIEW" + "Make This My Website" CTA |
 | **active** | Paying subscriber | customer's own domain | none |
 | **canceled / past_due** | Lapsed | redirect to a soft "site paused" page | — |
 
@@ -240,7 +239,7 @@ Outscraper + AI copy ─► business.json in DATA STORE (Cloudflare Worker + KV/
         └──────────────────────────┬───────────────────────────┘
             renders by handle (preview)        renders by domain (live)
                     │                                   │
-   PREVIEW  multiply.app/p/{handle}          LIVE  joesautoshop.com
+   PREVIEW  oktryme.com/p/{handle}          LIVE  joesautoshop.com
      • yellow "PREVIEW" banner + CTA            • Workers Custom Domain (auto DNS + edge SSL)
      • QR routes /r/{handle}, /qr/{handle}.png  • banner hidden; status=active
                     │                                   ▲
@@ -255,7 +254,7 @@ Outscraper + AI copy ─► business.json in DATA STORE (Cloudflare Worker + KV/
 
 ### 3b. Renderer (the site engine)
 - **One Worker** renders every site from a small set of templates + the business's `business.json`. Preview mode (by path) shows the banner/CTA; live mode (by custom domain) hides it. Same code, two entry points → preview and live can never drift.
-- **Preview sites are `noindex` (robots `noindex,nofollow` + excluded from any sitemap).** Thousands of auto-generated pages about real businesses on one domain is a classic **doorway/spam-network footprint** — left indexable it could get `multiply.app` penalized *and* rank against the very businesses we're pitching. Only **live** customer sites (on their own domains) are indexable. (Risk §11.)
+- **Preview sites are `noindex` (robots `noindex,nofollow` + excluded from any sitemap).** Thousands of auto-generated pages about real businesses on one domain is a classic **doorway/spam-network footprint** — left indexable it could get `oktryme.com` penalized *and* rank against the very businesses we're pitching. Only **live** customer sites (on their own domains) are indexable. (Risk §11.)
 - Output is fast static HTML/CSS at the edge; great Core Web Vitals and local SEO **for live sites**.
 - **Contact form** is a Worker route (`POST /lead/{handle}`) → sends email to the business (transactional provider, e.g. Cloudflare Email / Resend / Postmark) and stores the lead. This is the "request a quote" lead-gen value.
 
@@ -285,7 +284,7 @@ Cloudflare's **Registrar API (beta, verified June 2026)** registers brand-new do
 
 ## 5. The fulfillment flow (step-by-step)
 
-1. Lead scans the postcard QR → preview at `multiply.app/p/{handle}` (banner + **"Make This My Website"**).
+1. Lead scans the postcard QR → preview at `oktryme.com/p/{handle}` (banner + **"Make This My Website"**).
 2. Clicks CTA → **Stripe Checkout** ($49/mo default; $99 done-for-you offered as upgrade), collecting business contact + desired domain.
 3. **Stripe webhook** (`checkout.session.completed`) → flip `handle` to `active`.
 4. **Provision domain:** availability re-check → register via **Cloudflare Registrar API** (backups ready) → **attach as a Workers Custom Domain** → auto DNS + SSL. (Full detail + failure handling in §5a.)
@@ -316,17 +315,17 @@ Keyed by `handle` so webhook re-delivery never double-provisions; state is persi
 1. **Register domain** — Registrar API `register` (WHOIS privacy on, free). **We are the registrant** (our default contact); business info stored for records. On "name now taken," walk the backup list automatically.
 2. **Zone auto-created** in our account (Registrar domains land as a zone we control) — no separate DNS-host step.
 3. **Attach as a Workers Custom Domain** on the site Worker → Cloudflare **auto-creates the proxied DNS record and issues the edge TLS cert** (usually seconds). Add **`www`** (second custom domain or CNAME) redirecting to the apex.
-4. **Form email:** for MVP, lead notifications send **from our verified domain** (`leads@multiply.app`) with **reply-to the business** — zero per-domain email DNS, good deliverability. (Later: send from the customer's domain by adding SPF/DKIM/DMARC here; §7 #7.)
+4. **Form email:** for MVP, lead notifications send **from our verified domain** (`leads@oktryme.com`) with **reply-to the business** — zero per-domain email DNS, good deliverability. (Later: send from the customer's domain by adding SPF/DKIM/DMARC here; §7 #7.)
 5. **Flip status `active`** — Worker renders the live site at the custom domain (preview banner hidden).
 6. **Welcome email** — live URL + how to edit (self-serve AI editor, or upsell to $99 done-for-you).
 
 ### D. TLS
-- Automatic via Cloudflare **Universal SSL / edge certificate** on our zone — no ACME, no manual certs. Active within seconds of the custom-domain attach; until then the site is reachable on its **fallback subdomain** (`{handle}.multiply.app`), so there's never a "site down" gap.
+- Automatic via Cloudflare **Universal SSL / edge certificate** on our zone — no ACME, no manual certs. Active within seconds of the custom-domain attach; until then the site is reachable on its **fallback subdomain** (`{handle}.oktryme.com`), so there's never a "site down" gap.
 - A pre-existing **CAA** record could block issuance — non-issue for fresh domains we register; relevant only in the customer-owns edge case.
 
 ### E. Failure handling — payment succeeded but provisioning stalls
 Service is **delivered on the fallback subdomain even if the custom domain stalls**, so a paying customer is never left with nothing and we **don't auto-refund**:
-- **Registration fails** (all backups taken / registrar error): keep the subscription active, **serve the live site at `{handle}.multiply.app`**, flag ops, email the customer ("you're live here now; your custom domain is being set up"). Retry with backoff → dead-letter to manual after N tries.
+- **Registration fails** (all backups taken / registrar error): keep the subscription active, **serve the live site at `{handle}.oktryme.com`**, flag ops, email the customer ("you're live here now; your custom domain is being set up"). Retry with backoff → dead-letter to manual after N tries.
 - **TLS / DNS pending:** site stays on the fallback subdomain until the cert is green; a health check flips the "primary URL" automatically.
 - **Idempotency & rollback:** each step records state; re-runs resume rather than restart. A hard failure lands in a clean, supportable state (live on subdomain) — never a half-charged/half-built mess.
 - **Refunds:** manual, on request (service is delivered); standard Stripe dispute handling.
@@ -423,7 +422,7 @@ Cheap end-to-end proofs before pipeline build:
 5. **Domain custodian liability (we hold every domain) + Cloudflare lifecycle-API gap.** We register and hold thousands of domains in our own account, and **renewals/transfers/contact-updates are roadmapped-but-unshipped in Cloudflare's API** (§4) — so a missed renewal kills a customer's whole web presence, and "if we vanish, customers lose their domain" is a real trust objection. Mitigation: dashboard-driven renewals with calendar alarms until the lifecycle API lands; confirm target-TLD coverage (V2); keep a third-party registrar API as fallback; offer transfer-out (§5a F) to defuse the trust concern.
 6. **Chargeback / dispute rate → Stripe-account risk.** A high dispute rate (~1%+) can get the merchant account suspended — existential given the Stripe dependency. **Materially de-risked by design: conversions are *not* unsolicited** — every paying customer has (a) scanned their postcard QR, (b) verbally agreed on a live phone call, and (c) confirmed again at Stripe Checkout (and again at any $49→$99 upgrade). That triple opt-in, plus clear receipts, easy in-app self-cancel, and a recoverable "site paused" page, should keep disputes low. Mitigation: monitor Stripe dispute rate against the §0 kill criteria; log the scan + call as consent evidence for representment.
 7. **Data provenance / IP.** Site content is built from scraped Maps data. Mitigated by scope: we publish only **public factual fields** (business name, owner name, address, phone, hours, description) plus clearly-generic AI marketing copy, and we **never use Google Maps photos** (imagery is licensed category stock or customer-uploaded — §6). Residual: AI-copy fabrication (§7 #5 — verifiable facts only) and the small chance a business objects to its public info being used — honor takedown/opt-out requests promptly.
-8. **Preview-site SEO footprint.** Thousands of generated pages on `multiply.app` risk being flagged as a doorway/spam network and could rank against the businesses we pitch. Mitigation: previews are **`noindex,nofollow` and sitemap-excluded** (§3b); only live customer-domain sites are indexable.
+8. **Preview-site SEO footprint.** Thousands of generated pages on `oktryme.com` risk being flagged as a doorway/spam network and could rank against the businesses we pitch. Mitigation: previews are **`noindex,nofollow` and sitemap-excluded** (§3b); only live customer-domain sites are indexable.
 9. **"I own nothing" objection / churn.** Customers don't get a transferable asset by default. Mitigation: offer static-HTML export or domain transfer on request (§7 #4); lead with "done-for-you" value.
 10. **Pricing rejection.** SMBs may resist $49–$99/mo (and the 25% upsell take-rate is unproven). Mitigation: test price points (headroom both ways); lead with the "already built + your own domain" hook; consider annual/intro pricing.
 11. **Churn higher than the 8/6/4% schedule.** Unsolicited-origin customers may churn faster, especially in the first 90 days. The LTV (~$1,160) already prices in front-loaded churn (§1B); the ramp is robust to it but **sensitive to the steady-state 4%**. Mitigation: managed-service stickiness + owned domain; onboarding nudges in the high-churn early months; watch blended LTV against the §0 kill criteria.
