@@ -24,8 +24,7 @@ _Status: planning phase — not yet in build. This document consolidates the res
 - Any use of **photos scraped from Google Maps** (see §1A / §11) — imagery comes from category stock or customer upload only.
 
 **Kill criteria (stop / rethink if):**
-- Fully-loaded CAC > **~$230** (LTV:CAC < 5:1 at the ~$1,160 LTV) after the validation test.
-- **Net postcard→paid < ~0.30% sustained** (≈ fully-loaded CAC > ~$232, LTV:CAC < 5:1). This single net-conversion line — *not* separate scan/close cutoffs — is the kill floor, because scan and close trade off and don't enter the economics symmetrically. The §7 #8 go/no-go tripwire (scan ≥~7%) sits deliberately *above* this line to absorb the noisy early close-rate estimate.
+- **Net postcard→paid < ~0.30% sustained** (≈ fully-loaded CAC > **~$230**, LTV:CAC < 5:1 at the ~$1,160 LTV). This single net-conversion line — *not* separate scan/close cutoffs — is the kill floor, because scan and close trade off and don't enter the economics symmetrically. The §7 #8 go/no-go tripwire (scan ≥~7%) sits deliberately *above* this line to absorb the noisy early close-rate estimate.
 - Steady-state churn materially worse than the 8/6/4% schedule (blended LTV falling below ~$800).
 - Stripe **dispute rate trending toward ~1%** (merchant-account risk — §11).
 
