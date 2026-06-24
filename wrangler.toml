@@ -20,3 +20,13 @@ id = "REPLACE_WITH_kv_namespace_create_OUTPUT"
 #   STRIPE_WEBHOOK_SECRET    whsec_...
 #   PRICE_SELF_SERVE         price_... ($49 tier)
 #   PRICE_DONE_FOR_YOU       price_... ($99 tier)
+#   CF_ACCOUNT_ID            Cloudflare account id (V1 real provisioning)
+#   CF_API_TOKEN             scoped token: Workers + DNS + Zone + Registrar write
+#   CF_WORKER_SERVICE        this Worker's name (custom-domain attach target)
+#   RESEND_API_KEY           re_... (V5 outbound lead email)
+#   LEADS_FROM               verified sender, e.g. "OK Try Me <leads@oktryme.com>"
+#   OPS_FALLBACK_EMAIL       inbox for leads when a business has no email on file
+#
+# When CF_* are set, the Worker uses the real CloudflareProvisioner (V1);
+# otherwise it falls back to the StubProvisioner (V3 test runs). Likewise
+# RESEND_API_KEY + LEADS_FROM switch lead email from no-op logging to Resend.
