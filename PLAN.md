@@ -2,9 +2,9 @@
 
 **One-line concept:** Preemptively build websites for service businesses found on Google Maps, host a live *preview* for each on our own infrastructure, and on conversion flip it live on the customer's own domain — billing via Stripe (kept in full) on a **two-tier plan: $49/mo self-serve (edit your site by chatting with AI) or $99/mo done-for-you**. No third-party site platform: we self-host static sites on **Cloudflare**.
 
-_Status: pivoted June 2026 from a Wix-rev-share model to a self-hosted, own-the-stack model. Not yet in build. This document consolidates the research and decisions from the planning phase._
+_Status: planning phase — not yet in build. This document consolidates the research and decisions to date._
 
-> **What changed (June 2026 pivot).** The original plan provisioned each customer a **Wix Studio** site and earned a thin (~$5.40/mo) **rev share**. We dropped Wix entirely: we **self-host static lead-gen sites on Cloudflare** and bill via Stripe (100% ours) on **two tiers — $49/mo self-serve (AI chat editor) or $99/mo done-for-you**. This removes the entire Wix ownership/billing/duplication/voucher machinery (old §2–§5, T1–T5), roughly halves build complexity and platform risk, lowers the customer's price (one bill, not Wix-plus-a-fee), and pushes margin toward ~95%. The tradeoff: **we become the platform** — uptime, SSL, form email, and (for the $99 tier) every content edit are now ours.
+> **The tradeoff to keep in view:** we self-host, so **we are the platform** — uptime, SSL, form email, and (for the $99 tier) content edits are all ours. Margin runs ~95% and we keep 100% of the subscription.
 
 ---
 
@@ -17,16 +17,16 @@ _Status: pivoted June 2026 from a Wix-rev-share model to a self-hosted, own-the-
 - **Monetize (two tiers, 100% ours — no platform partner, no rev share):**
   - **$49/mo — self-serve.** Customer logs in and **edits their site by chatting with an AI** (the AI makes structured edits to the underlying `business.json` and re-renders). Low ops cost — edits don't consume our labor.
   - **$99/mo — done-for-you.** We make changes for them. Upsell for owners who'd rather not touch it; the premium *funds* the high-touch labor instead of it being a cost center.
-- **Service model:** self-serve is the **default**; managed is the **paid escalation** ("find it hard? we'll do it for you for $99"). This evolves the earlier fully-managed decision — managed is now a tier, not the baseline — and directly mitigates the edit-labor scaling risk (§12).
+- **Service model:** self-serve is the **default**; done-for-you is the **paid escalation** ("find it hard? we'll do it for you for $99"). Keeping most edits self-serve directly contains the edit-labor scaling risk (§11).
 
 ### Why self-host (platform decision)
 
-The target market is **static lead-gen sites for service trades** (plumber, HVAC, auto repair, landscaper) — contact form + "request a quote," no carts, no bookings. That is the one case where a heavyweight site platform adds cost and dependency without adding value:
+The target market is **static lead-gen sites for service trades** (plumber, HVAC, auto repair, landscaper) — contact form + "request a quote," no carts, no bookings. For that, a heavyweight third-party site platform would add cost and dependency without adding value:
 
-- **Margin & control.** Cloudflare static hosting is effectively free at our volumes; keeping 100% of the subscription (~$55 net blended across the $49/$99 tiers) beats a ~$5.40 rev share by ~10× and beats the old blended "rev-share + service fee" net (~$40) while charging the customer *less*.
-- **Simplicity.** No Duplicate Site API, Payment Request, first-owner trick, domain vouchers, or Velo backend. One Cloudflare Worker renders preview **and** live from the same data.
-- **De-risked.** No dependency on a third party's ToS, rate limits, or rev-share rules; no "automated bulk site creation" exposure on someone else's platform.
-- **Cleaner offer.** One bill from us: *"$49/mo — we build it, host it, and you edit by chatting with AI; or $99 and we handle every change."* Customer total cost drops vs. the old Wix-plus-service-fee (~$60) → better conversion and stickiness.
+- **Margin & control.** Cloudflare static hosting is effectively free at our volumes, so we keep ~$55 net of every blended subscription — no platform partner, no rev share — while the customer pays one low bill.
+- **Simplicity.** One Cloudflare Worker renders preview **and** live from the same data — no per-site provisioning machinery, ownership tricks, or third-party SDK.
+- **De-risked.** No dependency on another company's ToS, rate limits, or pricing; no "automated bulk site creation" exposure on someone else's platform.
+- **Cleaner offer.** One bill from us: *"$49/mo — we build it, host it, and you edit by chatting with AI; or $99 and we handle every change."* Simple and low → better conversion and stickiness.
 
 **Decision:** Self-host static sites on **Cloudflare**; bill via **Stripe** on two tiers; self-serve AI editing by default, done-for-you as the $99 upsell. (Segmenting commerce-capable businesses to a cart platform remains a *later, optional* branch — not in the MVP.)
 
@@ -43,13 +43,13 @@ The customer-acquisition engine. **Step 0 is a one-time setup; steps 1–5 are t
    - **Unambiguous business type.** Discard records where the service type isn't clear from the Outscraper fields — clean data in → believable AI copy out.
    Then classify the survivors by service type.
 2. **Batch & map.** Take a batch (start: **1,000 businesses**). Generate the `business.json` for the batch and load it into the data store (keyed by `handle`).
-3. **Outreach (direct-mail postcard + QR).** Mail each business a personalized **4×6 postcard** bearing its business name and a **unique QR code** that opens its **preview site** (`multiply.app/p/{handle}`). Hook: *"We already built your website — scan to see it live."* Postcards are chosen over cold SMS because they carry **no TCPA/CAN-SPAM exposure** and **~100% deliverability** (no carrier filtering); the tradeoff is higher per-piece cost and capital intensity (see §1B). Sent in automated batches via a print-and-mail API (Lob / PostGrid). _SMS is demoted to an optional low-volume, conversational warm-reply channel only — never the cold-volume engine (see §12)._
+3. **Outreach (direct-mail postcard + QR).** Mail each business a personalized **4×6 postcard** bearing its business name and a **unique QR code** that opens its **preview site** (`multiply.app/p/{handle}`). Hook: *"We already built your website — scan to see it live."* Direct mail carries **no TCPA/CAN-SPAM exposure** and **~100% deliverability** (no carrier filtering); the tradeoff is per-piece cost (see §1B). Sent in automated batches via a print-and-mail API (Lob / PostGrid).
 4. **Call + convert.** **Every scan triggers a phone call.** The scan notifies us in real time; we call the warm prospect (number from Outscraper) who is *literally looking at their own finished website* and walk them to **Stripe Checkout ($49/mo self-serve, or $99 done-for-you)**. The human call is what lifts conversion from a passive web rate to **10%+** (see §1B) — it's the core of the funnel, not an afterthought. On payment, we auto-provision the domain and flip the site live.
 5. **Retain & expand.** Customers edit via the **self-serve AI chat editor** ($49 tier) or hand changes to us ($99 done-for-you); the owned domain + done-for-you option drive stickiness. Upsell self-serve users to $99, and later to extras (more pages, booking, local SEO).
 
-> ☎️ **The phone call is the differentiator.** Calling a business that just scanned a postcard and viewed its own site is a *warm* B2B follow-up — low legal risk (B2B sales calls to business lines are largely exempt from DNC rules; these prospects just self-identified by scanning). It's the opposite of cold SMS. The tradeoff is **labor**: every scan = a call, so calling capacity becomes the operation's binding constraint (see §1B / §12).
+> ☎️ **The phone call is the differentiator.** Calling a business that just scanned a postcard and viewed its own site is a *warm* B2B follow-up — low legal risk (B2B sales calls to business lines are largely exempt from DNC rules; these prospects just self-identified by scanning). The tradeoff is **labor**: every scan = a call, so calling capacity is the operation's binding constraint (see §1B / §11).
 
-> ✅ **Channel decision — postcards replace cold SMS.** Cold SMS was the single biggest threat to the model: **TCPA liability** ($500–$1,500 *per text*, B2B not a clean exemption) plus **carrier filtering** that silently blocks cold 10DLC blasts. No provider makes cold marketing SMS compliant — consent (which scraped Maps leads lack) is the gating requirement. **Direct-mail postcards remove both problems**: no consent requirement, no TCPA/CAN-SPAM, no carrier filter — a mailed piece simply arrives. The new constraint is **economic, not legal**: postcards cost ~30× an SMS, so the model is **self-funding** — bootstrappable on ~$2k by reinvesting revenue (see §1B) — rather than a cheap blitz. The "we already built your site, scan to see it" hook is *stronger* on a physical card with a QR than buried in a filtered text.
+> ✅ **Why direct mail (and not cold SMS/email).** Cold marketing SMS to these leads isn't viable: **TCPA liability** ($500–$1,500 per text, B2B not a clean exemption) plus **carrier filtering** that blocks unconsented bulk sends — and no provider makes cold marketing SMS compliant without prior consent, which scraped Maps leads lack. **Direct-mail postcards have no consent requirement, no TCPA/CAN-SPAM exposure, and no carrier filter** — a mailed piece simply arrives. They cost more per piece, but the model is **self-funding** (bootstrappable on ~$2k, §1B), and the "we already built your site, scan to see it" hook is strong on a physical card.
 
 ## 1B. Unit economics & revenue projection
 
@@ -68,7 +68,7 @@ We keep **100%** of both tiers. Assuming a **25% upsell take-rate** to the $99 d
 - **Blended gross ARPU** ≈ 0.75 × $49 + 0.25 × $99 ≈ **$61.5/mo**
 - **Blended net** ≈ 0.75 × $46 + 0.25 × $80 ≈ **~$55/mo**
 
-> The tiering does two things: raises ARPU **and** moves edit labor onto the customers who pay for it. The $49 tier's edits are self-serve (near-zero marginal labor); the labor-heavy customers self-select into the $99 tier that funds it. **Take-rate is the new assumption** (§7) — but even at 0% upsell the floor is the $49 base, so this is pure upside. The old plan needed a service fee bolted onto a thin rev share; here two clean owned tiers do the work.
+> The tiering does two things: raises ARPU **and** moves edit labor onto the customers who pay for it. The $49 tier's edits are self-serve (near-zero marginal labor); the labor-heavy customers self-select into the $99 tier that funds it. **Take-rate is a key assumption** (§7) — but even at 0% upsell the floor is the $49 base, so it's pure upside.
 
 ### Funnel assumptions (postcard + phone-call base case)
 
@@ -89,7 +89,7 @@ The base case uses the **floor** of the expected ranges (scan ≥10%, call-close
 | **Fully-loaded CAC (mail + calls)** | **~$88** |
 | **LTV : CAC** | **~16 : 1**; **payback ≈ 1.6 months** |
 
-> The phone call transforms the math. Vs. the passive-web base case (0.23% net, $263 CAC), calling every scanner lifts net conversion to **~0.95%** and drops fully-loaded CAC to **~$88** — a **~16:1 LTV:CAC and ~1.6-month payback**. **This largely dissolves the capital-intensity problem** that dominated the earlier draft; the new binding constraint is **calling capacity**, not cash.
+> Calling every scanner is what lifts net conversion to **~0.95%** and holds fully-loaded CAC at **~$88** — a **~16:1 LTV:CAC and ~1.6-month payback**. The binding constraint is **calling capacity**, not cash.
 
 ### Ramp — bootstrapped: ≤ $2,000 out of pocket, scale calls by hiring reps
 
@@ -113,7 +113,7 @@ Two settings define this path: **(1) never fund more than $2,000 total** — see
 **Reading the table:**
 - **Out-of-pocket never exceeds $2,000** (the seed) — every postcard from month 2 on is paid for by an already-converted customer.
 - **Calling scales with the base, and reps scale with calls** — you (solo) cover it through ~month 6; first hire ~month 7–8; ~10–11 reps by month 12. Rep wages are inside the per-call cost, so reps are self-funding.
-- **$100k/mo gross MRR ≈ month 10–11**; exiting month 12 at ~$222k/mo gross MRR (3,608 customers). Far faster than the capped/solo path (~month 15) — hiring reps is what buys the speed.
+- **$100k/mo gross MRR ≈ month 10–11**; exiting month 12 at ~$222k/mo gross MRR (3,608 customers). Hiring reps to lift the daily call ceiling is what buys this speed (staying solo would stretch it well past a year).
 - **Monthly profit reads ~$0 by choice** (reinvesting all to grow). Stop scaling anytime and profit jumps to ~$55 × active — e.g. pause at month 10 (1,436 customers) → **~$79k/mo**.
 
 > **Per-customer economics (why this works):** ~$88 CAC, ~$55/mo net, **payback ~1.6 months**, ~25-month lifetime → **~$1,285 lifetime profit per customer** (~15:1).
@@ -129,7 +129,7 @@ Two settings define this path: **(1) never fund more than $2,000 total** — see
 | High | 20% | 20% | 3.8% | ~$16 | ~$28 | ~49 : 1 |
 | _Downside check_ | 5% | 7% | 0.33% | ~$180 | ~$215 | ~6 : 1 (still works) |
 
-Even the **downside check** (well below the expected floor) clears a healthy ~5:1 — the phone call provides real margin of safety the passive-web model lacked.
+Even the **downside check** (well below the expected floor) clears a healthy ~5:1 — the phone call provides real margin of safety.
 
 ### The honest verdict
 
@@ -187,9 +187,9 @@ business list (from data store, by handle)
 
 ---
 
-## 2. Billing & site lifecycle (the keystone)
+## 2. Billing & site lifecycle
 
-Replaces the old Wix ownership/Payment-Request machinery. The whole lifecycle is a status flag on a `handle` plus a Stripe subscription.
+The whole lifecycle is a status flag on a `handle` plus a Stripe subscription.
 
 | State | Meaning | URL | Banner |
 |---|---|---|---|
@@ -200,7 +200,7 @@ Replaces the old Wix ownership/Payment-Request machinery. The whole lifecycle is
 - **Billing:** **Stripe subscription — $49 self-serve or $99 done-for-you**, owned by us. We are the merchant of record; the customer's card pays us directly. No platform partner in the money flow. (Checkout defaults to $49; $99 is offered as an upgrade — at checkout and later in-app when a self-serve user struggles.)
 - **Activation:** Stripe webhook (`checkout.session.completed` → `customer.subscription.active`) flips the handle `preview → active` and triggers domain provisioning (§5).
 - **Dunning:** Stripe handles retries; on final failure → `past_due → canceled`, site shows a "paused — update billing" page (recoverable).
-- **Ownership stance (managed, per decision):** we own and operate the site and (by default) the domain; the customer is paying for a managed service, not buying an asset. _Mitigation for the "I own nothing" objection: offer a static-HTML **export** or domain transfer on request (§12)._
+- **Ownership stance (managed, per decision):** we own and operate the site and (by default) the domain; the customer is paying for a managed service, not buying an asset. _Mitigation for the "I own nothing" objection: offer a static-HTML **export** or domain transfer on request (§11)._
 
 ---
 
@@ -239,7 +239,7 @@ Outscraper + AI copy ─► business.json in DATA STORE (Cloudflare Worker + KV/
 
 ## 4. Domain strategy — single-vendor Cloudflare ✅
 
-**Update (verified June 2026):** Cloudflare shipped a **Registrar API (beta, April 2026)** that registers brand-new domains programmatically — search, real-time availability/pricing, and register **at cost** (~$10.44/.com, no markup), WHOIS privacy free, **completing in seconds**. This removes the gotcha that previously forced a third-party registrar: **we now use Cloudflare end-to-end** — register + DNS + routing + SSL, one vendor, one API token. Because **we register and hold every domain in our own Cloudflare account** (§5a), routing uses **Workers Custom Domains** (auto DNS + auto cert) — **not** Cloudflare for SaaS (which is reserved for the customer-owns-a-domain edge case).
+Cloudflare's **Registrar API (beta, verified June 2026)** registers brand-new domains programmatically — search, real-time availability/pricing, and register **at cost** (~$10.44/.com, no markup), WHOIS privacy free, **completing in seconds**. So we use **Cloudflare end-to-end** — register + DNS + routing + SSL, one vendor, one API token. Because **we register and hold every domain in our own Cloudflare account** (§5a), routing uses **Workers Custom Domains** (auto DNS + auto cert) — **not** Cloudflare for SaaS (which is reserved for the customer-owns-a-domain edge case).
 
 | Step | How | Cost | Notes |
 |---|---|---|---|
@@ -342,7 +342,7 @@ Not the MVP default (we register fresh). When needed later: either (a) **Cloudfl
 
 ### Outreach / operations
 8. **Two-rate validation (gating)** — the **~0.95% net** base case = scan rate (≥10%?) × call-close (≥10%?). Both are optimistic until measured. A **~2,000–5,000-postcard test (~$1.2–3k) with disciplined calling of every scanner** must measure real scan + call-close before scaling. _The two numbers the whole model rides on._
-9. **Calling operation (the new constraint)** — at ~100k postcards/mo, ~9,500 scans/mo = ~9,500 calls/mo (~7–9 reps). Decide: in-house SDRs vs. outsourced calling vs. a hybrid; the real **cost-per-dial** (assumed ~$2.50); call scripts; CRM + real-time scan→call routing (scan webhook → dialer/queue); hours-of-coverage so warm scanners are called fast (ideally within minutes).
+9. **Calling operation (the operational constraint)** — at ~100k postcards/mo, ~9,500 scans/mo = ~9,500 calls/mo (~7–9 reps). Decide: in-house SDRs vs. outsourced calling vs. a hybrid; the real **cost-per-dial** (assumed ~$2.50); call scripts; CRM + real-time scan→call routing (scan webhook → dialer/queue); hours-of-coverage so warm scanners are called fast (ideally within minutes).
 
 ---
 
@@ -358,13 +358,7 @@ Cheap end-to-end proofs before pipeline build:
 
 ---
 
-## 9. (Reserved)
-
-_Former "Wix staff / B2B contact" section — obsolete after the self-host pivot. No third-party platform contact is required to build the MVP._
-
----
-
-## 10. Verification scorecard
+## 9. Verification scorecard
 
 | Item | Verdict |
 |---|---|
@@ -380,7 +374,7 @@ _Former "Wix staff / B2B contact" section — obsolete after the self-host pivot
 
 ---
 
-## 11. Suggested build phases
+## 10. Suggested build phases
 
 1. **Phase 0 — Spikes (V1–V5).** Prove custom-hostname automation, registrar API, Stripe→provision, render/edit loop, form email. Lowest cost, highest risk-reduction.
 2. **Phase 1 — Data layer.** `business.json` schema + Cloudflare KV/D1/R2; handle + domain→handle maps; status fields.
@@ -392,24 +386,20 @@ _Former "Wix staff / B2B contact" section — obsolete after the self-host pivot
 
 ---
 
-## 12. Risks (ranked)
+## 11. Risks (ranked)
 
 1. **Two-rate conversion shortfall — CAC vs. LTV.** The base ~0.95% net rides on scan ≥10% **and** call-close ≥10%; both unproven. If they land far below floor, CAC climbs (though the phone call gives a safety margin — even half-floor ≈ 5:1 LTV:CAC). Mitigation: the gating two-rate test with real calling (§7 #8) before scale; stop if fully-loaded CAC > ~$275 (LTV:CAC < 5:1 at the ~$1,375 LTV). _Where the model lives or dies._
-2. **Calling capacity & cost (the new binding constraint).** Volume is now gated by how many warm scanners you can call fast — ~9,500 calls/mo per 100k postcards (~7–9 reps); slow/incomplete calling silently tanks the close rate that justifies the whole funnel. Mitigation: staff/outsource calling ahead of mail volume; real-time scan→call routing; validate cost-per-dial (§7 #9). _Capital intensity is largely retired — calling throughput replaces it._
+2. **Calling capacity & cost (the binding constraint).** Volume is gated by how many warm scanners you can call fast — ~9,500 calls/mo per 100k postcards (~7–9 reps); slow/incomplete calling silently tanks the close rate that justifies the whole funnel. Mitigation: staff/outsource calling ahead of mail volume; real-time scan→call routing; validate cost-per-dial (§7 #9). _The constraint is calling throughput, not capital._
 3. **Edit-labor scaling — largely mitigated by the two-tier model.** Self-serve AI chat (the $49 default) means most edits consume no labor; the labor-heavy customers self-select into the paid $99 tier that funds the work. _Residual risks:_ (a) **before the editor ships** (Phase 6) everyone is effectively managed — watch edits-per-customer-per-month and don't out-scale the manual bridge; (b) **AI editor quality/safety** — a bad edit can break or deface a live customer site, so the editor must be schema-constrained, preview-before-publish, with diff/undo (§7 #3).
 4. **We are the platform — uptime / SSL / form deliverability.** Outages, cert failures, or lead emails in spam are now *our* fault. Mitigation: Cloudflare's reliability + Workers Custom Domain auto-SSL + proper SPF/DKIM (V1, V5); monitoring/alerting.
-5. **Domain renewal automation (beta gap).** Cloudflare's new Registrar API registers new domains (this resolved the old gotcha) but **renewals/transfers aren't in the API yet**. Mitigation: handle year-2 renewals via dashboard until API support lands (Cloudflare says it's coming); confirm target-TLD coverage (V2); keep a third-party registrar API as fallback.
+5. **Domain renewal automation (beta gap).** Cloudflare's Registrar API registers new domains, but **renewals/transfers aren't in the API yet**. Mitigation: handle year-2 renewals via dashboard until API support lands (Cloudflare says it's coming); confirm target-TLD coverage (V2); keep a third-party registrar API as fallback.
 6. **"I own nothing" objection / churn.** Customers don't get a transferable asset by default. Mitigation: offer static-HTML export or domain transfer on request (§7 #4); lead with "done-for-you" value.
 7. **Pricing rejection.** SMBs may resist $49–$99/mo for an unsolicited site (and the 25% upsell take-rate is unproven). Mitigation: test price points (headroom both ways); lead with the "already built + your own domain" hook; consider annual/intro pricing.
 8. **Churn higher than 4%.** Unsolicited-origin customers may churn faster. Mitigation: managed-service stickiness + owned domain; model sensitivity (§1B).
 
 ---
 
-## Appendix A — Why not a third-party site platform (historical)
-
-The original plan compared website-builder **referral/rev-share programs** (Wix Studio ~$5.40/mo rev share, Shopify Partner, Squarespace Circle, Duda, etc.) and chose Wix Studio for recurring economics + service-business fit. **The self-host pivot supersedes this:** keeping 100% of a $49/mo subscription (~$46 net) beats every rev-share program by an order of magnitude, and removes the platform dependency. The referral comparison is retained only as the rationale for *why we no longer route through any of them*. Revisit a third-party platform only for a future **commerce-capable** segment (carts/bookings) where building it ourselves isn't worth it.
-
-## Appendix B — Key source links
+## Appendix A — Key source links
 
 - [Workers Custom Domains](https://developers.cloudflare.com/workers/configuration/routing/custom-domains/) (primary routing path) · [Cloudflare for SaaS — custom hostnames](https://developers.cloudflare.com/cloudflare-for-platforms/cloudflare-for-saas/) (customer-owned-domain edge case)
 - [Cloudflare Workers](https://developers.cloudflare.com/workers/) · [Pages](https://developers.cloudflare.com/pages/) · [KV](https://developers.cloudflare.com/kv/) · [D1](https://developers.cloudflare.com/d1/) · [R2](https://developers.cloudflare.com/r2/)
