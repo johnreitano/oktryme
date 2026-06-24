@@ -53,4 +53,4 @@ npx wrangler deploy --dry-run --outdir dist   # bundles for the Workers runtime
 - **Cloudflare**: Account ID + API token (Workers, DNS, Zone, **Registrar write**),
   Registrar **beta enrollment**, billing profile, default registrant contact.
 - **`oktryme.com`** under our control with DNS on Cloudflare (V1 fallback + V5 sender).
-- **Email**: provider choice (Resend/Postmark/Cloudflare Email) + API key + SPF/DKIM/DMARC.
+- **Email** (decided, §5a D): **outbound** lead notifications via **Resend** (verify `oktryme.com` + DKIM, API key); **inbound** role addresses via **Cloudflare Email Routing** (free forward). Separate systems.

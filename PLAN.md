@@ -316,6 +316,8 @@ Keyed by `handle` so webhook re-delivery never double-provisions; state is persi
 2. **Zone auto-created** in our account (Registrar domains land as a zone we control) — no separate DNS-host step.
 3. **Attach as a Workers Custom Domain** on the site Worker → Cloudflare **auto-creates the proxied DNS record and issues the edge TLS cert** (usually seconds). Add **`www`** (second custom domain or CNAME) redirecting to the apex.
 4. **Form email:** for MVP, lead notifications send **from our verified domain** (`leads@oktryme.com`) with **reply-to the business** — zero per-domain email DNS, good deliverability. (Later: send from the customer's domain by adding SPF/DKIM/DMARC here; §7 #7.)
+
+> **Email split (decided — don't re-litigate):** **inbound** (receiving/forwarding role addresses like `admin@oktryme.com`, `hello@…`) uses **Cloudflare Email Routing** — free, and our domains are already on Cloudflare; it auto-adds MX + SPF and forwards to a real inbox. **Outbound** (the app's transactional lead notifications, `leads@oktryme.com`) uses **Resend** (verify the domain + DKIM). Resend is send-only, so it is *not* used for forwarding. Note: a domain can run Email Routing **or** another inbound provider, not both (one MX set).
 5. **Flip status `active`** — Worker renders the live site at the custom domain (preview banner hidden).
 6. **Welcome email** — live URL + how to edit (self-serve AI editor, or upsell to $99 done-for-you).
 
@@ -389,7 +391,7 @@ Cheap end-to-end proofs before pipeline build:
 - [ ] **V2 — Cloudflare Registrar API fit:** confirm the beta API registers our target TLDs (.com etc.) unattended at cost, and decide the **year-2 renewal** path (dashboard now vs. API when it lands). Keep a third-party registrar API as fallback.
 - [ ] **V3 — Stripe → provisioning:** Checkout subscription → webhook → status flip → domain provision, end-to-end on a test card.
 - [ ] **V4 — Render + edit loop:** Worker renders a real `business.json`; an edit to the JSON re-renders instantly (preview = live engine).
-- [ ] **V5 — Form email deliverability:** contact-form submission lands in an inbox (not spam) with correct SPF/DKIM.
+- [ ] **V5 — Form email deliverability:** contact-form submission lands in an inbox (not spam) with correct SPF/DKIM. **Outbound via Resend** (verify `oktryme.com` + DKIM, send `leads@oktryme.com`); **inbound role addresses via Cloudflare Email Routing** (free forward to a real inbox) — the two are separate systems (§5a D).
 
 ---
 
