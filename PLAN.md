@@ -8,9 +8,32 @@ _Status: planning phase — not yet in build. This document consolidates the res
 
 ---
 
+## 0. Scope, glossary & kill criteria
+
+**Glossary (load-bearing terms used throughout):**
+- **`handle`** — our internal slug for a business (e.g. `joes-auto`); the primary key everywhere (data store, preview URL, QR, mail status, Stripe linkage).
+- **`business.json`** — the canonical per-business record (scraped facts + AI copy). Single source of truth; the renderer turns it into a site, and edits just mutate it.
+- **preview vs live** — *preview* = generated-but-unpaid site on our domain (`multiply.app/p/{handle}`, yellow banner + CTA); *live* = paid site on the customer's own domain (banner hidden). Same renderer, two entry points.
+- **allowlist** — the curated set of worthwhile service-business categories from Step-0 discovery (§1A).
+
+**Out of scope (MVP) — explicitly deferred:**
+- Carts, bookings, e-commerce (later optional branch — §1).
+- Onboarding customers who **already own a domain** (edge case — §5a).
+- **Domain transfer-out** (future stub — §5a F).
+- Sending lead email **from the customer's own domain** (MVP sends from ours — §5a D).
+- Any use of **photos scraped from Google Maps** (see §1A / §11) — imagery comes from category stock or customer upload only.
+
+**Kill criteria (stop / rethink if):**
+- Fully-loaded CAC > **~$230** (LTV:CAC < 5:1 at the ~$1,160 LTV) after the validation test.
+- **Net postcard→paid < ~0.30% sustained** (≈ fully-loaded CAC > ~$232, LTV:CAC < 5:1). This single net-conversion line — *not* separate scan/close cutoffs — is the kill floor, because scan and close trade off and don't enter the economics symmetrically. The §7 #8 go/no-go tripwire (scan ≥~7%) sits deliberately *above* this line to absorb the noisy early close-rate estimate.
+- Steady-state churn materially worse than the 8/6/4% schedule (blended LTV falling below ~$800).
+- Stripe **dispute rate trending toward ~1%** (merchant-account risk — §11).
+
+---
+
 ## 1. Business model
 
-- **Source:** Outscraper pulls Google Maps business listings (name, category, address, phone, hours, reviews, photos) into structured data.
+- **Source:** Outscraper pulls Google Maps business listings (name, owner name, category, address, phone, hours, business description) into structured data. **We use the factual/text fields only — we do *not* scrape or republish Google Maps photos** (copyright we don't own); site imagery comes from category stock or customer upload (§11).
 - **Generate:** A templated pipeline + AI-generated copy turns each business's data into a **static website**.
 - **Preview/pitch:** Each business gets a live preview URL (on our domain) to view its proposed site before paying.
 - **Convert:** A **Stripe** subscription flips the site live on the customer's own domain.
@@ -82,58 +105,61 @@ The base case uses the **floor** of the expected ranges (scan ≥10%, call-close
 | Scan → paid (after the call) | **10%** (floor; likely 10–20%) |
 | **Net postcard → paying customer** | **~0.95%** (~1 per 105 postcards) |
 | Net revenue / customer / month (blended, two tiers) | ~$55 |
-| Customer LTV (@ 4% churn) | **~$1,375** ($55 ÷ 0.04) |
-| Monthly churn | 4% |
+| Customer LTV (tiered churn — see below) | **~$1,160** (~21 expected months × $55) |
+| Monthly churn (front-loaded) | **8% mo 1–3, 6% mo 4–6, 4% thereafter** |
 | Mail cost (~$0.60/postcard) | → **mail-only CAC ≈ $63** |
 | Calling labor (~10 calls/customer @ ~$2.50/call) | → **+ ~$25/customer** |
 | **Fully-loaded CAC (mail + calls)** | **~$88** |
-| **LTV : CAC** | **~16 : 1**; **payback ≈ 1.6 months** |
+| **LTV : CAC** | **~13 : 1**; **payback ≈ 1.6 months** |
 
-> Calling every scanner is what lifts net conversion to **~0.95%** and holds fully-loaded CAC at **~$88** — a **~16:1 LTV:CAC and ~1.6-month payback**. The binding constraint is **calling capacity**, not cash.
+> **Why ~$1,160 LTV (not the old flat-4% $1,375):** churn is front-loaded — unsolicited-origin customers are likeliest to leave early, then the survivors stick. Modeling **8%/mo for months 1–3, 6% for 4–6, and 4% thereafter** gives an expected lifetime of **~21 months** → ~$1,160 LTV. This is the conservative anchor used everywhere below; flat-4% (~$1,375) is upside if early retention beats plan.
+
+> Calling every scanner is what lifts net conversion to **~0.95%** and holds fully-loaded CAC at **~$88** — a **~13:1 LTV:CAC and ~1.6-month payback**. The binding constraint is **calling capacity**, not cash.
 
 ### Ramp — bootstrapped: ≤ $2,000 out of pocket, scale calls by hiring reps
 
 Two settings define this path: **(1) never fund more than $2,000 total** — seed $2k, then reinvest 100% of net revenue; and **(2) no call cap — hire sales reps as volume grows.** Because each customer pays back in ~1.6 months, reinvested revenue compounds the active base **~50%/month**. Acq spend each month = the net revenue we reinvest (M1 = the $2k seed); **rep wages are already inside the ~$2.50/call cost**, so the calling team is funded from revenue, not a separate draw. Per-postcard all-in ≈ **$0.85**; CAC ≈ **$88/customer**; reps assumed at ~**60 dials/day** each (~22 business days/mo).
 
-| Month | Postcards | Closing calls | Reps (~60 dials/day) | New paying | Active (end, 4% churn) | Gross MRR exiting @ $61.5 | Monthly profit | Cumulative out-of-pocket |
+| Month | Postcards | Closing calls | Reps (~60 dials/day) | New paying | Active (end, tiered churn) | Gross MRR exiting @ $61.5 | Monthly profit | Cumulative out-of-pocket |
 |---|---|---|---|---|---|---|---|---|
 | 1 | ~2,400 | ~230 | 1 (you) | ~23 | 23 | ~$1.4k | −$2,000 | **−$2,000** |
-| 2 | ~1,490 | ~140 | 1 (you) | ~14 | 36 | ~$2.2k | ~$0 | **−$2,000** |
-| 3 | ~2,360 | ~225 | 1 (you) | ~22 | 57 | ~$3.5k | ~$0 | **−$2,000** |
-| 4 | ~3,750 | ~355 | 1 | ~36 | 90 | ~$5.6k | ~$0 | **−$2,000** |
-| 5 | ~5,940 | ~565 | 1 | ~57 | 143 | ~$8.8k | ~$0 | **−$2,000** |
-| 6 | ~9,420 | ~895 | ~1 | ~90 | 228 | ~$14.0k | ~$0 | **−$2,000** |
-| 7 | ~14,930 | ~1,420 | ~1–2 | ~142 | 361 | ~$22.2k | ~$0 | **−$2,000** |
-| 8 | ~23,670 | ~2,255 | ~2 | ~225 | 572 | ~$35.2k | ~$0 | **−$2,000** |
-| 9 | ~37,500 | ~3,570 | ~3 | ~357 | 906 | ~$55.7k | ~$0 | **−$2,000** |
-| 10 | ~59,460 | ~5,660 | ~4–5 | ~566 | 1,436 | ~$88.3k | ~$0 | **−$2,000** |
-| 11 | ~94,250 | ~8,975 | ~7 | ~898 | 2,276 | ~$140k | ~$0 | **−$2,000** |
-| 12 | ~149,400 | ~14,225 | ~10–11 | ~1,423 | 3,608 | **~$222k** | ~$0 | **−$2,000** |
+| 2 | ~1,490 | ~140 | 1 (you) | ~14 | 35 | ~$2.1k | ~$0 | **−$2,000** |
+| 3 | ~2,360 | ~225 | 1 (you) | ~22 | 54 | ~$3.3k | ~$0 | **−$2,000** |
+| 4 | ~3,750 | ~355 | 1 | ~36 | 87 | ~$5.3k | ~$0 | **−$2,000** |
+| 5 | ~5,940 | ~565 | 1 | ~57 | 139 | ~$8.5k | ~$0 | **−$2,000** |
+| 6 | ~9,420 | ~895 | ~1 | ~90 | 221 | ~$13.6k | ~$0 | **−$2,000** |
+| 7 | ~14,930 | ~1,420 | ~1–2 | ~142 | 354 | ~$21.8k | ~$0 | **−$2,000** |
+| 8 | ~23,670 | ~2,255 | ~2 | ~225 | 565 | ~$34.7k | ~$0 | **−$2,000** |
+| 9 | ~37,500 | ~3,570 | ~3 | ~357 | 899 | ~$55.3k | ~$0 | **−$2,000** |
+| 10 | ~59,460 | ~5,660 | ~4–5 | ~566 | 1,429 | ~$87.9k | ~$0 | **−$2,000** |
+| 11 | ~94,250 | ~8,975 | ~7 | ~898 | 2,270 | ~$140k | ~$0 | **−$2,000** |
+| 12 | ~149,400 | ~14,225 | ~10–11 | ~1,423 | 3,602 | **~$222k** | ~$0 | **−$2,000** |
 
 **Reading the table:**
 - **Out-of-pocket never exceeds $2,000** (the seed) — every postcard from month 2 on is paid for by an already-converted customer.
 - **Calling scales with the base, and reps scale with calls** — you (solo) cover it through ~month 6; first hire ~month 7–8; ~10–11 reps by month 12. Rep wages are inside the per-call cost, so reps are self-funding.
-- **$100k/mo gross MRR ≈ month 10–11**; exiting month 12 at ~$222k/mo gross MRR (3,608 customers). Hiring reps to lift the daily call ceiling is what buys this speed (staying solo would stretch it well past a year).
-- **Monthly profit reads ~$0 by choice** (reinvesting all to grow). Stop scaling anytime and profit jumps to ~$55 × active — e.g. pause at month 10 (1,436 customers) → **~$79k/mo**.
+- **$100k/mo gross MRR ≈ month 10–11**; exiting month 12 at ~$222k/mo gross MRR (3,602 customers). Hiring reps to lift the daily call ceiling is what buys this speed (staying solo would stretch it well past a year).
+- **Front-loaded churn barely moves the 12-month curve.** The active counts above already use the **8/6/4% schedule** (§1B), not flat 4% — yet month-12 active is ~3,602 vs ~3,608 under flat-4%, because the higher early-churn months hit only the small early cohorts. The model is robust to worse early retention; it's the *steady-state* 4% that drives LTV.
+- **Monthly profit reads ~$0 by choice** (reinvesting all to grow). Stop scaling anytime and profit jumps to ~$55 × active — e.g. pause at month 10 (1,429 customers) → **~$79k/mo**.
 
-> **Per-customer economics (why this works):** ~$88 CAC, ~$55/mo net, **payback ~1.6 months**, ~25-month lifetime → **~$1,285 lifetime profit per customer** (~15:1).
+> **Per-customer economics (why this works):** ~$88 CAC, ~$55/mo net, **payback ~1.6 months**, ~21-month lifetime → **~$1,075 lifetime profit per customer** (~13:1).
 
-> ⚠️ **Two real-world frictions** (treat the curve as idealized → realistically ~month 12–18 to $100k/mo): **(1)** hiring, training, and managing ~10 reps in a year is a genuine operational lift — recruiting lags demand, ramp time and call quality vary; **(2)** the whole curve still assumes the **scan + call-close rates hold** (≥10% each, §7 #8) — validate them in the month-1 $2k batch before reinvesting hard. If they come in low, you've risked only ~$2k to find out.
+> ⚠️ **Treat the headline timing as idealized — plan to ~month 12–18 for $100k/mo, not month 10.** Two real-world frictions drag the curve right: **(1)** hiring, training, and managing ~10 reps inside a year is a genuine operational lift — recruiting lags demand, and ramp time and call quality vary; **(2)** the curve assumes the **scan + call-close rates hold** (≥10% each, §7 #8) — validate them in the month-1 $2k batch before reinvesting hard. If they come in low, you've risked only ~$2k to find out. The conservative read (12–18 months) is the one to commit to externally; month-10 is the optimistic ceiling.
 
 ### Scenario sensitivity (validate the two rates first)
 
-| Scenario | Scan | Call-close | Net→paid | Mail CAC | Fully-loaded CAC | LTV:CAC (@ $1,375 LTV) |
+| Scenario | Scan | Call-close | Net→paid | Mail CAC | Fully-loaded CAC | LTV:CAC (@ $1,160 LTV) |
 |---|---|---|---|---|---|---|
-| **Base (floor)** | 10% | 10% | 0.95% | ~$63 | **~$88** | **~16 : 1** |
-| Mid | 15% | 15% | 2.1% | ~$28 | ~$45 | ~31 : 1 |
-| High | 20% | 20% | 3.8% | ~$16 | ~$28 | ~49 : 1 |
-| _Downside check_ | 5% | 7% | 0.33% | ~$180 | ~$215 | ~6 : 1 (still works) |
+| **Base (floor)** | 10% | 10% | 0.95% | ~$63 | **~$88** | **~13 : 1** |
+| Mid | 15% | 15% | 2.1% | ~$28 | ~$45 | ~26 : 1 |
+| High | 20% | 20% | 3.8% | ~$16 | ~$28 | ~41 : 1 |
+| _Downside check_ | 5% | 7% | 0.33% | ~$180 | ~$215 | ~5 : 1 (still works) |
 
 Even the **downside check** (well below the expected floor) clears a healthy ~5:1 — the phone call provides real margin of safety.
 
 ### The honest verdict
 
-**The two assumptions to prove are scan rate (≥10%?) and call-close (≥10%?)** — both are optimistic until measured, and the whole model scales on their product. But the phone call gives genuine downside protection: even at half the floor rates, LTV:CAC stays ~5:1. **Mandatory first step: a live test (~2,000–5,000 postcards ≈ $1,200–3,000, plus disciplined calling of every scanner) measuring real scan rate _and_ call-close before scaling.** Secondary thing to validate early: **calling throughput and cost per dial** — it's now the operational ceiling. Pricing: **$49 self-serve / $99 done-for-you** (two tiers, §1B).
+**The two assumptions to prove are scan rate (≥10%?) and call-close (≥10%?)** — optimistic until measured, and the model scales on their product. The phone call gives genuine downside protection: even at half the floor rates, LTV:CAC stays ~5:1. **Mandatory first step is the gating ~2–5k-postcard test (§7 #8)** — run it as a go/no-go tripwire (not a precise rate estimate; see the sample-size note there), validate **calling throughput and cost-per-dial** alongside it (now the operational ceiling), and hold the **§0 kill criteria** ready before reinvesting hard.
 
 ---
 
@@ -229,7 +255,8 @@ Outscraper + AI copy ─► business.json in DATA STORE (Cloudflare Worker + KV/
 
 ### 3b. Renderer (the site engine)
 - **One Worker** renders every site from a small set of templates + the business's `business.json`. Preview mode (by path) shows the banner/CTA; live mode (by custom domain) hides it. Same code, two entry points → preview and live can never drift.
-- Output is fast static HTML/CSS at the edge; great Core Web Vitals and local SEO.
+- **Preview sites are `noindex` (robots `noindex,nofollow` + excluded from any sitemap).** Thousands of auto-generated pages about real businesses on one domain is a classic **doorway/spam-network footprint** — left indexable it could get `multiply.app` penalized *and* rank against the very businesses we're pitching. Only **live** customer sites (on their own domains) are indexable. (Risk §11.)
+- Output is fast static HTML/CSS at the edge; great Core Web Vitals and local SEO **for live sites**.
 - **Contact form** is a Worker route (`POST /lead/{handle}`) → sends email to the business (transactional provider, e.g. Cloudflare Email / Resend / Postmark) and stores the lead. This is the "request a quote" lead-gen value.
 
 ### 3c. Postcard QR/tracking
@@ -249,7 +276,7 @@ Cloudflare's **Registrar API (beta, verified June 2026)** registers brand-new do
 | **Renewals** | ⚠️ **not yet in the API** (beta) | — | dashboard for now (see caveat); covered by the subscription; we hold the domain by default, transfer on request |
 
 **Beta caveats (verify in Phase 0 / V2):**
-- **Renewals, transfers, and contact updates are NOT yet in the API** — only registration. Year-1 is fully automated; **year-2 renewals must currently be handled via the dashboard** (or wait for API support, which Cloudflare says is coming). Fine at early volume; revisit before the first renewals come due.
+- **Post-purchase lifecycle operations — renewals, transfers, and contact updates — are explicitly named by Cloudflare as "on the roadmap" but NOT yet shipped.** Only *registration* is in the beta API today. Year-1 is fully automated; **year-2 renewals must currently be handled via the dashboard** (or wait for the roadmapped API support). This is a stated commitment, not a guaranteed date — fine at early volume, but **revisit before the first renewals come due** and don't architect as if the lifecycle API already exists.
 - **TLD coverage:** only a subset of extensions are in the beta — **confirm .com (and any other target TLDs) are supported** before relying on it.
 - **Fallback:** if a needed TLD or renewal automation is missing, keep a third-party registrar API (Porkbun / Name.com ~$10/yr) as backstop; Cloudflare for SaaS still handles hostname + SSL regardless of registrar.
 - If a customer already owns a domain, skip registration and just attach their hostname (they add one DNS record).
@@ -316,7 +343,7 @@ Not the MVP default (we register fresh). When needed later: either (a) **Cloudfl
 
 ## 6. Components to build
 
-- **Data pipeline:** Outscraper ingest → **filter (no `site` URL + unambiguous type, §1A)** → normalize → `business.json` schema → AI copy generation → store in Cloudflare KV/D1 (+ images to R2).
+- **Data pipeline:** Outscraper ingest (**text/factual fields only — no Maps photos**, §1A) → **filter (no `site` URL + unambiguous type, §1A)** → normalize → `business.json` schema → AI copy generation → **imagery from a licensed per-category stock set** (default hero/services images keyed by trade) → store in Cloudflare KV/D1 (+ images to R2). Customer-uploaded photos replace stock post-conversion (via the editor / done-for-you).
 - **Site Worker (the core):** renders preview (by handle) + live (by custom domain) from templates + `business.json`; serves contact form (`/lead/{handle}`), QR routes (`/r`, `/qr`), and Stripe webhooks.
 - **Templates:** a small set of responsive static site templates (hero, services, reviews, hours/map, contact). Yellow preview banner + CTA shown only in preview mode.
 - **Billing:** Stripe products/prices ($49 + $99 tiers), Checkout, customer portal (self-serve upgrade $49→$99), webhook handler (activate / dunning / cancel).
@@ -330,18 +357,19 @@ Not the MVP default (we register fresh). When needed later: either (a) **Cloudfl
 ## 7. Open questions
 
 ### Pricing / model
-1. **Pricing — two tiers: $49 self-serve / $99 done-for-you** (100% ours). Open: the **upsell take-rate** (assumed 25% — the key new revenue assumption); whether to offer/anchor the $99 at checkout vs. surface it later when a self-serve user struggles; annual option (prepay discount → cash flow + lower churn); setup fee (none, to maximize conversion).
+1. **Pricing — two tiers: $49 self-serve / $99 done-for-you** (100% ours). Open: the **upsell take-rate** (assumed 25% — the key new revenue assumption); whether to offer/anchor the $99 at checkout vs. surface it later when a self-serve user struggles; annual option (prepay discount → cash flow + lower churn); setup fee (none, to maximize conversion). **Also unvalidated: the ~$15/mo done-for-you edit-labor figure** (§1B) — that's only ~20–40 min/customer/month at modest wage; if real done-for-you customers ask for more, $99-tier net erodes. Track actual edit-time-per-$99-customer once live and re-price or tighten SLA (§7 #3) if it overshoots.
 
 ### Product / scope
 2. **Template breadth** — how many industry templates for a believable MVP across the **allowlisted top trades** (the §1A Step-0 discovery output drives this list)?
 3. **AI chat editor scope & guardrails** — which edit types are self-serve (text, hours, photos, services, colors) vs. out of scope; schema constraints so the AI can't break the site or fabricate claims; undo/diff; and the done-for-you SLA (e.g. 1–2 business days) for the $99 tier. This is now the product backbone, not just an ops workflow.
 4. **Ownership / export** — confirm default "we manage & own" stance; define an **export / domain-transfer** offer to defuse the "I own nothing" objection and reduce churn friction.
-5. **AI copy guardrails** — prevent fabricating claims about a business known only from Maps data (use only verifiable scraped facts + clearly generic marketing language).
+5. **AI copy guardrails + content provenance** — prevent fabricating claims about a business known only from Maps data (use only verifiable scraped facts + clearly generic marketing language); **no Google Maps photos** (licensed category stock or customer upload only, §6); and define a **takedown/opt-out policy** for any business that objects to its public info being used in a preview.
 6. **Data completeness** — handling sparse listings (no hours, no photos, miscategorized).
 7. **Contact-form email deliverability** — sending lead notifications on behalf of businesses needs proper SPF/DKIM/from-domain setup to avoid spam folders.
 
 ### Outreach / operations
 8. **Two-rate validation (gating)** — the **~0.95% net** base case = scan rate (≥10%?) × call-close (≥10%?). Both are optimistic until measured. A **~2,000–5,000-postcard test (~$1.2–3k) with disciplined calling of every scanner** must measure real scan + call-close before scaling. _The two numbers the whole model rides on._
+   - **Sample-size reality:** scan rate is the easy one — 2,000 postcards at ~10% yields **~200 scans**, enough to estimate scan rate to roughly ±4 pts. **Call-close is the hard read:** ~200 scans × ~10% = only **~20 conversions**, a 95% CI of roughly ±13 pts (≈ 4%–17%) — too wide to confirm the floor confidently. To pin call-close to ~±5 pts you need **~150+ closed-call outcomes ≈ a few thousand scans ≈ ~30k+ postcards**, which is a *scale* decision, not a $2k test. **So treat the $2k test as a go/no-go tripwire (is scan clearly ≥~7%? does *anyone* convert on the call?), not a precise rate estimate** — then refine call-close continuously as volume ramps, holding the kill criteria (§0) ready. **The tripwire and kill criterion are the same yardstick at two confidence levels:** the kill floor is a single economic line — net postcard→paid < ~0.30% (CAC > ~$232, LTV:CAC < 5:1, §0). The scan ≥~7% tripwire sits *above* that line on purpose: at 7% scan even a disappointing 7% close still nets ~0.49% → ~7:1, clearing the floor with margin to absorb the noisy ~20-conversion close estimate. Three bands: **scale** if projected LTV:CAC ≥ ~8:1 (net ≳0.5%); **iterate** (fix card/script/targeting, retest) between 5:1 and 8:1; **kill** below 5:1.
 9. **Calling operation (the operational constraint)** — at ~100k postcards/mo, ~9,500 scans/mo = ~9,500 calls/mo (~7–9 reps). Decide: in-house SDRs vs. outsourced calling vs. a hybrid; the real **cost-per-dial** (assumed ~$2.50); call scripts; CRM + real-time scan→call routing (scan webhook → dialer/queue); hours-of-coverage so warm scanners are called fast (ideally within minutes).
 
 ---
@@ -388,14 +416,17 @@ Cheap end-to-end proofs before pipeline build:
 
 ## 11. Risks (ranked)
 
-1. **Two-rate conversion shortfall — CAC vs. LTV.** The base ~0.95% net rides on scan ≥10% **and** call-close ≥10%; both unproven. If they land far below floor, CAC climbs (though the phone call gives a safety margin — even half-floor ≈ 5:1 LTV:CAC). Mitigation: the gating two-rate test with real calling (§7 #8) before scale; stop if fully-loaded CAC > ~$275 (LTV:CAC < 5:1 at the ~$1,375 LTV). _Where the model lives or dies._
+1. **Two-rate conversion shortfall — CAC vs. LTV.** The base ~0.95% net rides on scan ≥10% **and** call-close ≥10%; both unproven. If they land far below floor, CAC climbs (though the phone call gives a safety margin — even half-floor ≈ 5:1 LTV:CAC). Mitigation: the gating two-rate test with real calling (§7 #8) before scale; stop if fully-loaded CAC > ~$230 (LTV:CAC < 5:1 at the ~$1,160 LTV — §0 kill criteria). _Where the model lives or dies._
 2. **Calling capacity & cost (the binding constraint).** Volume is gated by how many warm scanners you can call fast — ~9,500 calls/mo per 100k postcards (~7–9 reps); slow/incomplete calling silently tanks the close rate that justifies the whole funnel. Mitigation: staff/outsource calling ahead of mail volume; real-time scan→call routing; validate cost-per-dial (§7 #9). _The constraint is calling throughput, not capital._
 3. **Edit-labor scaling — largely mitigated by the two-tier model.** Self-serve AI chat (the $49 default) means most edits consume no labor; the labor-heavy customers self-select into the paid $99 tier that funds the work. _Residual risks:_ (a) **before the editor ships** (Phase 6) everyone is effectively managed — watch edits-per-customer-per-month and don't out-scale the manual bridge; (b) **AI editor quality/safety** — a bad edit can break or deface a live customer site, so the editor must be schema-constrained, preview-before-publish, with diff/undo (§7 #3).
 4. **We are the platform — uptime / SSL / form deliverability.** Outages, cert failures, or lead emails in spam are now *our* fault. Mitigation: Cloudflare's reliability + Workers Custom Domain auto-SSL + proper SPF/DKIM (V1, V5); monitoring/alerting.
-5. **Domain renewal automation (beta gap).** Cloudflare's Registrar API registers new domains, but **renewals/transfers aren't in the API yet**. Mitigation: handle year-2 renewals via dashboard until API support lands (Cloudflare says it's coming); confirm target-TLD coverage (V2); keep a third-party registrar API as fallback.
-6. **"I own nothing" objection / churn.** Customers don't get a transferable asset by default. Mitigation: offer static-HTML export or domain transfer on request (§7 #4); lead with "done-for-you" value.
-7. **Pricing rejection.** SMBs may resist $49–$99/mo for an unsolicited site (and the 25% upsell take-rate is unproven). Mitigation: test price points (headroom both ways); lead with the "already built + your own domain" hook; consider annual/intro pricing.
-8. **Churn higher than 4%.** Unsolicited-origin customers may churn faster. Mitigation: managed-service stickiness + owned domain; model sensitivity (§1B).
+5. **Domain custodian liability (we hold every domain) + Cloudflare lifecycle-API gap.** We register and hold thousands of domains in our own account, and **renewals/transfers/contact-updates are roadmapped-but-unshipped in Cloudflare's API** (§4) — so a missed renewal kills a customer's whole web presence, and "if we vanish, customers lose their domain" is a real trust objection. Mitigation: dashboard-driven renewals with calendar alarms until the lifecycle API lands; confirm target-TLD coverage (V2); keep a third-party registrar API as fallback; offer transfer-out (§5a F) to defuse the trust concern.
+6. **Chargeback / dispute rate → Stripe-account risk.** A high dispute rate (~1%+) can get the merchant account suspended — existential given the Stripe dependency. **Materially de-risked by design: conversions are *not* unsolicited** — every paying customer has (a) scanned their postcard QR, (b) verbally agreed on a live phone call, and (c) confirmed again at Stripe Checkout (and again at any $49→$99 upgrade). That triple opt-in, plus clear receipts, easy in-app self-cancel, and a recoverable "site paused" page, should keep disputes low. Mitigation: monitor Stripe dispute rate against the §0 kill criteria; log the scan + call as consent evidence for representment.
+7. **Data provenance / IP.** Site content is built from scraped Maps data. Mitigated by scope: we publish only **public factual fields** (business name, owner name, address, phone, hours, description) plus clearly-generic AI marketing copy, and we **never use Google Maps photos** (imagery is licensed category stock or customer-uploaded — §6). Residual: AI-copy fabrication (§7 #5 — verifiable facts only) and the small chance a business objects to its public info being used — honor takedown/opt-out requests promptly.
+8. **Preview-site SEO footprint.** Thousands of generated pages on `multiply.app` risk being flagged as a doorway/spam network and could rank against the businesses we pitch. Mitigation: previews are **`noindex,nofollow` and sitemap-excluded** (§3b); only live customer-domain sites are indexable.
+9. **"I own nothing" objection / churn.** Customers don't get a transferable asset by default. Mitigation: offer static-HTML export or domain transfer on request (§7 #4); lead with "done-for-you" value.
+10. **Pricing rejection.** SMBs may resist $49–$99/mo (and the 25% upsell take-rate is unproven). Mitigation: test price points (headroom both ways); lead with the "already built + your own domain" hook; consider annual/intro pricing.
+11. **Churn higher than the 8/6/4% schedule.** Unsolicited-origin customers may churn faster, especially in the first 90 days. The LTV (~$1,160) already prices in front-loaded churn (§1B); the ramp is robust to it but **sensitive to the steady-state 4%**. Mitigation: managed-service stickiness + owned domain; onboarding nudges in the high-churn early months; watch blended LTV against the §0 kill criteria.
 
 ---
 
