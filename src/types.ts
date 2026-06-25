@@ -88,6 +88,17 @@ export interface BusinessRecord {
   images: ImageSet;
   stripe?: StripeLink;
   mailStatus?: string;
+  /** ISO timestamp of record creation (stamped by the store on first write). */
+  createdAt?: string;
   /** ISO timestamp of the last edit (set by callers). */
   updatedAt?: string;
 }
+
+export const SITE_STATUSES: SiteStatus[] = [
+  "preview",
+  "active",
+  "past_due",
+  "canceled",
+];
+
+export const PLANS: Plan[] = ["self_serve", "done_for_you"];
