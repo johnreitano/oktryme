@@ -43,7 +43,7 @@ describe("V1: CloudflareProvisioner.registerDomain", () => {
   it("registers an available domain that completes immediately (201)", async () => {
     const { fn, calls } = mockFetch((c) => {
       if (c.url.includes("/domain-check"))
-        return { status: 200, json: { success: true, result: [{ domain_name: c.body.domains[0], available: true }] } };
+        return { status: 200, json: { success: true, result: { domains: [{ name: c.body.domains[0], registrable: true }] } } };
       if (c.url.includes("/registrations"))
         return { status: 201, json: { success: true, result: { status: "succeeded" } } };
       return { status: 200, json: { success: true, result: {} } };
@@ -57,7 +57,7 @@ describe("V1: CloudflareProvisioner.registerDomain", () => {
     let polls = 0;
     const { fn } = mockFetch((c) => {
       if (c.url.includes("/domain-check"))
-        return { status: 200, json: { success: true, result: [{ domain_name: "joesauto.com", available: true }] } };
+        return { status: 200, json: { success: true, result: { domains: [{ name: "joesauto.com", registrable: true }] } } };
       if (c.url.includes("/registration-status")) {
         polls++;
         return { status: 200, json: { success: true, result: { status: polls >= 2 ? "succeeded" : "pending" } } };
@@ -75,7 +75,7 @@ describe("V1: CloudflareProvisioner.registerDomain", () => {
     const { fn } = mockFetch((c) => {
       if (c.url.includes("/domain-check")) {
         const d = c.body.domains[0];
-        return { status: 200, json: { success: true, result: [{ domain_name: d, available: d !== "joesauto.com" }] } };
+        return { status: 200, json: { success: true, result: { domains: [{ name: d, registrable: d !== "joesauto.com" }] } } };
       }
       if (c.url.includes("/registrations"))
         return { status: 201, json: { success: true, result: { status: "succeeded" } } };
@@ -88,7 +88,7 @@ describe("V1: CloudflareProvisioner.registerDomain", () => {
   it("throws when no candidate can be registered", async () => {
     const { fn } = mockFetch((c) => {
       if (c.url.includes("/domain-check"))
-        return { status: 200, json: { success: true, result: [{ domain_name: c.body.domains[0], available: false }] } };
+        return { status: 200, json: { success: true, result: { domains: [{ name: c.body.domains[0], registrable: false }] } } };
       return { status: 200, json: { success: true, result: {} } };
     });
     await expect(provisioner(fn).registerDomain("joes-auto", "joesauto.com", ["joesauto.net"])).rejects.toThrow(/Could not register/);

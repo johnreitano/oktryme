@@ -101,20 +101,23 @@ export class CloudflareProvisioner implements Provisioner {
 
   // ---- Registrar ----
 
-  /** Best-effort availability check (beta `domain-check`). */
+  /**
+   * Best-effort availability check (`domain-check`). Live GA shape (verified
+   * V1/V2, 2026-06-24): `{ result: { domains: [{ name, registrable, tier,
+   * pricing? , reason? }] } }` — `registrable` is the availability signal.
+   */
   async isAvailable(domain: string): Promise<boolean> {
     try {
-      const { body } = await this.cf<Array<{ domain_name?: string; available?: boolean }>>(
-        "POST",
-        `${this.acct}/registrar/domain-check`,
-        { domains: [domain] },
-      );
-      const entry = Array.isArray(body.result)
-        ? body.result.find((r) => r.domain_name === domain) ?? body.result[0]
+      const { body } = await this.cf<{
+        domains?: Array<{ name?: string; registrable?: boolean }>;
+      }>("POST", `${this.acct}/registrar/domain-check`, { domains: [domain] });
+      const list = body.result?.domains;
+      const entry = Array.isArray(list)
+        ? list.find((d) => d.name === domain) ?? list[0]
         : undefined;
       // If we can't parse a definitive answer, assume available and let the
       // registration call be the source of truth (it'll fail → we walk on).
-      return entry?.available ?? true;
+      return entry?.registrable ?? true;
     } catch {
       return true;
     }
