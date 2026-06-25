@@ -50,6 +50,29 @@ describe("normalizeOutscraperRecord", () => {
     expect(validateBusinessRecord(out).ok).toBe(true);
   });
 
+  it("handles the real v3 shapes: array hours, state_code, owner_title", () => {
+    const out = normalizeOutscraperRecord(
+      {
+        name: "Bao Auto Repair",
+        type: "Auto repair shop",
+        phone: "+1 865-688-8695",
+        street: "1100 Bradshaw Garden Dr",
+        city: "Knoxville",
+        state: "Tennessee", // full name…
+        state_code: "TN", // …but state_code is preferred
+        postal_code: "37912",
+        owner_title: "Bao Auto Repair", // business name, NOT a person → ignored
+        working_hours: { Monday: ["8AM-12PM", "1PM-6PM"], Sunday: ["Closed"] },
+        website: "",
+      },
+      { trade: AUTO },
+    );
+    expect(out.business.address.state).toBe("TN");
+    expect(out.business.hours.monday).toBe("8AM-12PM, 1PM-6PM"); // array joined
+    expect(out.business.ownerName).toBeUndefined(); // owner_title not used
+    expect(validateBusinessRecord(out).ok).toBe(true);
+  });
+
   it("falls back to a factual trade+location description when none scraped", () => {
     const out = normalizeOutscraperRecord({ ...raw, description: undefined }, { trade: AUTO });
     expect(out.business.description).toBe("Auto Repair in Knoxville, TN.");

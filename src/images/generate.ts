@@ -12,8 +12,8 @@
 
 import type { ImagePrompt } from "./prompts.js";
 
-/** Nano Banana Pro — Gemini 3 Pro Image. Overridable via opts/env. */
-export const IMAGE_MODEL = "gemini-3-pro-image-preview";
+/** Nano Banana Pro — Gemini 3 Pro Image (GA). Overridable via opts/env. */
+export const IMAGE_MODEL = "gemini-3-pro-image";
 
 export interface GeneratedImage {
   bytes: Uint8Array;

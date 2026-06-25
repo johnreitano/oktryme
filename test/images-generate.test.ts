@@ -73,7 +73,7 @@ describe("generateImage", () => {
 
     const img = await generateImage("a garage", { apiKey: "k", fetchImpl });
     expect(img.bytes.length).toBeGreaterThan(0);
-    expect(calledUrl).toContain("gemini-3-pro-image-preview:generateContent");
+    expect(calledUrl).toContain("gemini-3-pro-image:generateContent");
     expect(calledUrl).toContain("key=k");
   });
 

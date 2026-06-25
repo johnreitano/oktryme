@@ -5,6 +5,7 @@ import {
   factsFromRecord,
   generateCopy,
   parseCopyResponse,
+  tidyProse,
   type CopyFacts,
 } from "../src/copy/generate.js";
 import { normalizeOutscraperRecord } from "../src/ingest/outscraper.js";
@@ -36,6 +37,17 @@ describe("buildCopyUserPrompt", () => {
     const noOwner = buildCopyUserPrompt({ ...facts, ownerName: undefined, description: undefined });
     expect(noOwner).not.toContain("Owner:");
     expect(noOwner).not.toContain("Listed description:");
+  });
+});
+
+describe("tidyProse", () => {
+  it("inserts a missing space after sentence punctuation", () => {
+    expect(tidyProse("Serving Knoxville, TN.Our team is ready.")).toBe(
+      "Serving Knoxville, TN. Our team is ready.",
+    );
+  });
+  it("collapses newlines and runs of whitespace", () => {
+    expect(tidyProse("Line one.\n\nLine two   here.")).toBe("Line one. Line two here.");
   });
 });
 

@@ -53,7 +53,7 @@ const SYSTEM_PROMPT = [
   "- Keep it concrete and grounded; avoid hype and filler. American English.",
   "",
   "OUTPUT:",
-  "- about: 2 short paragraphs (~40-70 words total) — what the business does, the",
+  "- about: ONE cohesive paragraph (~50-70 words) — what the business does, the",
   "  city it serves, and an invitation to request a quote. No fabricated specifics.",
   "- services: 4-6 services typical of this trade, each with a one-sentence,",
   "  generic description of that service.",
@@ -160,6 +160,19 @@ interface GeminiTextResponse {
   candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
 }
 
+/**
+ * Tidy model prose: collapse internal whitespace and insert a missing space
+ * after sentence punctuation (the model sometimes joins sentences/paragraphs,
+ * e.g. "…Knoxville, TN.Our team…"). The renderer shows `about` as one block.
+ */
+export function tidyProse(s: string): string {
+  return s
+    .replace(/\s*\n\s*/g, " ")
+    .replace(/([.!?,;:])([A-Z])/g, "$1 $2")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 /** Extract + validate the JSON copy from a Gemini response (tested unit). */
 export function parseCopyResponse(body: unknown): GeneratedCopy {
   const res = body as GeminiTextResponse;
@@ -187,7 +200,7 @@ export function parseCopyResponse(body: unknown): GeneratedCopy {
       name: s.name,
       description: typeof s.description === "string" ? s.description : undefined,
     }));
-  return { about: obj.about, services };
+  return { about: tidyProse(obj.about), services };
 }
 
 /** Merge generated copy into a draft record (sets about + services). */

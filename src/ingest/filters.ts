@@ -82,7 +82,8 @@ export function applyFilters(records: OutscraperRecord[]): FilterResult {
   } as FilterResult["summary"];
 
   for (const record of records) {
-    if (hasRealWebsite(record.site)) {
+    // v3 uses `website`; some variants `site`.
+    if (hasRealWebsite(record.website ?? record.site)) {
       rejected.push({ record, reason: "has-website" });
       summary["has-website"]++;
       continue;

@@ -77,7 +77,9 @@ async function ingestBusinesses(env: Record<string, string>): Promise<void> {
     console.log(`Loaded ${raw.length} sample records from ${samplePath}`);
   } else {
     if (!env.OUTSCRAPER_API_KEY) throw new Error("OUTSCRAPER_API_KEY not set (or use --sample)");
-    for (const trade of ALLOWLIST) {
+    // --trades caps how many allowlist trades to query (validate-small first).
+    const trades = ALLOWLIST.slice(0, Number(opt("trades", String(ALLOWLIST.length))));
+    for (const trade of trades) {
       const query = `${trade.label}, ${REGION}`;
       process.stdout.write(`Querying Outscraper: ${query} … `);
       const batch = await fetchBusinesses(query, {

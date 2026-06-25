@@ -28,17 +28,23 @@ export interface OutscraperRecord {
   type?: string;
   category?: string;
   subtypes?: string;
-  /** Existing website URL — the core no-`site` filter keys on this. */
+  /** Existing website URL — the core no-website filter keys on this. The v3
+   *  API uses `website`; some variants use `site`. */
+  website?: string;
   site?: string;
   description?: string;
   phone?: string;
+  /** One-line address; v3 uses `address`, some variants `full_address`. */
   full_address?: string;
+  address?: string;
   street?: string;
   city?: string;
+  /** Full state name (e.g. "Tennessee"); `state_code` is the 2-letter form. */
   state?: string;
+  state_code?: string;
   postal_code?: string;
-  /** Day → "9:00 AM-5:00 PM" | "Closed". Keys may be capitalized. */
-  working_hours?: Record<string, string> | null;
+  /** Day → "8AM-6PM" | "Closed". Values may be a string or an array of ranges. */
+  working_hours?: Record<string, string | string[]> | null;
   [extra: string]: unknown;
 }
 
@@ -70,9 +76,13 @@ function normalizeHours(raw: OutscraperRecord["working_hours"]): Hours {
   if (!raw || typeof raw !== "object") return hours;
   const byLower = new Map<string, string>();
   for (const [day, value] of Object.entries(raw)) {
-    if (typeof value === "string" && value.trim()) {
-      byLower.set(day.trim().toLowerCase(), value.trim());
-    }
+    // v3 returns arrays of ranges (["8AM-12PM","1PM-6PM"]); older shapes a string.
+    const str = Array.isArray(value)
+      ? value.filter((v) => typeof v === "string" && v.trim()).join(", ")
+      : typeof value === "string"
+        ? value.trim()
+        : "";
+    if (str) byLower.set(day.trim().toLowerCase(), str);
   }
   for (const day of DAYS_OF_WEEK) {
     const v = byLower.get(day as DayOfWeek);
@@ -137,9 +147,11 @@ export function normalizeOutscraperRecord(
   opts: NormalizeOptions,
 ): BusinessRecord {
   const name = firstNonEmpty(raw.name) ?? "";
-  const fromFull = raw.full_address ? splitFullAddress(raw.full_address) : {};
+  const oneLine = firstNonEmpty(raw.full_address, raw.address);
+  const fromFull = oneLine ? splitFullAddress(oneLine) : {};
   const city = firstNonEmpty(raw.city, fromFull.city) ?? "";
-  const state = firstNonEmpty(raw.state, fromFull.state) ?? "";
+  // Prefer the 2-letter `state_code` ("TN") over the full name ("Tennessee").
+  const state = firstNonEmpty(raw.state_code, raw.state, fromFull.state) ?? "";
 
   // The category string shown in the hero tagline — prefer the scraped type,
   // fall back to our trade label so the tagline is never blank.
@@ -166,7 +178,9 @@ export function normalizeOutscraperRecord(
     plan: "self_serve",
     business: {
       name,
-      ownerName: firstNonEmpty(raw.owner_name, raw.owner_title),
+      // owner_title is usually the business name (not a person), so don't use
+      // it as an owner — only a real owner_name field, if present.
+      ownerName: firstNonEmpty(raw.owner_name),
       category,
       address: {
         line1: firstNonEmpty(raw.street, fromFull.line1) ?? "",
@@ -194,13 +208,31 @@ export interface FetchOptions {
   baseUrl?: string;
   /** fetch impl (injectable for tests). */
   fetchImpl?: typeof fetch;
+  /** Poll cadence while the async job runs (default 4s). */
+  pollIntervalMs?: number;
+  /** Max poll attempts before giving up (default 45 ≈ 3 min). */
+  maxPollAttempts?: number;
+}
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Flatten Outscraper's array-of-arrays `data` (one inner array per query) to records. */
+function flattenData(data: unknown): OutscraperRecord[] {
+  const arr = Array.isArray(data) ? data : [];
+  return (arr.flat() as OutscraperRecord[]).filter((r) => r && typeof r === "object");
 }
 
 /**
  * Pull Google Maps listings for a query (e.g. "auto repair, Knoxville, TN")
- * via Outscraper's synchronous Maps Search. Synchronous mode is fine for the
- * small validation pull; the full discovery run should switch to async polling.
- * Returns the raw records — filtering/normalization happen downstream.
+ * via Outscraper's Maps Search in **async** mode: submit the job (returns a
+ * `results_location`), then poll until it finishes. Synchronous mode holds the
+ * HTTP connection open for the whole scrape and reliably times out, so async +
+ * polling is the correct pattern. Returns raw records — filtering/normalization
+ * happen downstream.
+ *
+ * NOTE: Outscraper Maps Search has no server-side "no website" filter — every
+ * matching record is returned (and billed); the no-`site` filter (§1A) is
+ * applied client-side in `applyFilters`.
  */
 export async function fetchBusinesses(
   query: string,
@@ -208,20 +240,44 @@ export async function fetchBusinesses(
 ): Promise<OutscraperRecord[]> {
   const base = opts.baseUrl ?? "https://api.outscraper.cloud";
   const doFetch = opts.fetchImpl ?? fetch;
+  const headers = { "X-API-KEY": opts.apiKey };
+
   const url = new URL("/maps/search-v3", base);
   url.searchParams.set("query", query);
   url.searchParams.set("limit", String(opts.limit ?? 50));
-  url.searchParams.set("async", "false");
+  url.searchParams.set("async", "true");
 
-  const res = await doFetch(url.toString(), {
-    headers: { "X-API-KEY": opts.apiKey },
-  });
-  if (!res.ok) {
-    throw new Error(`Outscraper ${res.status}: ${await res.text()}`);
+  const submit = await doFetch(url.toString(), { headers });
+  if (!submit.ok && submit.status !== 202) {
+    throw new Error(`Outscraper submit ${submit.status}: ${await submit.text()}`);
   }
-  const body = (await res.json()) as { data?: unknown };
-  // Maps Search returns `data` as an array-of-arrays (one per query); flatten.
-  const data = Array.isArray(body.data) ? body.data : [];
-  const flat = data.flat() as OutscraperRecord[];
-  return flat.filter((r) => r && typeof r === "object");
+  const submitted = (await submit.json()) as {
+    status?: string;
+    results_location?: string;
+    data?: unknown;
+  };
+  // Small jobs occasionally return data inline on submit.
+  if (Array.isArray(submitted.data)) return flattenData(submitted.data);
+
+  const resultsUrl = submitted.results_location;
+  if (!resultsUrl) throw new Error("Outscraper: no results_location in submit response");
+
+  // Outscraper Maps jobs routinely take several minutes; poll patiently.
+  const interval = opts.pollIntervalMs ?? 5000;
+  const maxAttempts = opts.maxPollAttempts ?? 120; // ~10 min ceiling
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    await sleep(interval);
+    const poll = await doFetch(resultsUrl, { headers });
+    if (poll.status === 202) continue; // still pending
+    if (!poll.ok) throw new Error(`Outscraper poll ${poll.status}: ${await poll.text()}`);
+    const body = (await poll.json()) as { status?: string; data?: unknown };
+    if (body.status === "Success" && Array.isArray(body.data)) {
+      return flattenData(body.data);
+    }
+    if (body.status === "Pending" || body.status === "In Progress") continue;
+    // Some responses omit status but carry data once done.
+    if (Array.isArray(body.data)) return flattenData(body.data);
+    throw new Error(`Outscraper: unexpected status "${body.status}"`);
+  }
+  throw new Error(`Outscraper: timed out polling ${resultsUrl}`);
 }

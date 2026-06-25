@@ -53,10 +53,15 @@ describe("applyFilters", () => {
     expect(out.kept[0].trade.trade).toBe("auto-repair");
   });
 
+  it("detects the v3 `website` field (not just legacy `site`)", () => {
+    const out = applyFilters([rec({ website: "https://joesauto.com" })]);
+    expect(out.rejected[0]?.reason).toBe("has-website");
+  });
+
   it("rejects with the right reason and counts the funnel", () => {
     const out = applyFilters([
       rec({}), // kept
-      rec({ site: "https://has-a-site.com" }), // has-website
+      rec({ website: "https://has-a-site.com" }), // has-website (v3 field)
       rec({ type: "Sushi Restaurant" }), // not-on-allowlist
       rec({ type: "Car Dealership" }), // excluded
       rec({ type: "" }), // ambiguous-type
