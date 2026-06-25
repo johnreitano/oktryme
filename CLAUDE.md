@@ -34,11 +34,11 @@ You may spend money on my behalf **within a running budget** instead of asking b
 
 | Allowed | Spent | Remaining |
 |---|---|---|
-| $100.00 | $0.00 | $100.00 |
+| $100.00 | $10.00 | $90.00 |
 
 | Date | Item | Amount | Running total |
 |---|---|---|---|
-| — | _(no spends yet)_ | — | $0.00 |
+| 2026-06-25 | Outscraper API credits (prepaid top-up; activates API + funds the §7 #8 validation pull) | $10.00 | $10.00 |
 
 > Known recurring cost *outside* this budget: `assessmybusiness.app` (V1-live, §8) auto-renews ~$14.20/yr — disable in the Cloudflare dashboard if not keeping it. Fold it into the ledger only if/when it renews.
 
