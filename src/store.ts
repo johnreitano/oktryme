@@ -1,4 +1,5 @@
 import type { BusinessRecord } from "./types.js";
+import { assertBusinessRecord, validateBusinessRecord } from "./validate.js";
 
 /**
  * Data store abstraction over the canonical `business.json` records.
@@ -19,10 +20,21 @@ export class KVStore implements Store {
   constructor(private kv: KVNamespace) {}
 
   async get(handle: string): Promise<BusinessRecord | null> {
-    return this.kv.get<BusinessRecord>(REC_PREFIX + handle, "json");
+    const raw = await this.kv.get(REC_PREFIX + handle, "json");
+    if (raw === null) return null;
+    // A corrupt stored record must never render as a live site. Log it (so it
+    // surfaces in Worker logs) and treat as not-found rather than crash.
+    const result = validateBusinessRecord(raw);
+    if (!result.ok) {
+      console.error(`invalid record at ${REC_PREFIX + handle}: ${result.issues.join("; ")}`);
+      return null;
+    }
+    return result.value;
   }
 
   async put(rec: BusinessRecord): Promise<void> {
+    assertBusinessRecord(rec); // reject bad writes loudly at the boundary
+    if (!rec.createdAt) rec.createdAt = new Date().toISOString();
     await this.kv.put(REC_PREFIX + rec.handle, JSON.stringify(rec));
     if (rec.domain) await this.mapDomain(rec.domain, rec.handle);
   }

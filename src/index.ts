@@ -13,6 +13,9 @@ import { CloudflareProvisioner } from "./provisioning/cloudflare.js";
 
 export interface Env {
   BUSINESS_KV: KVNamespace;
+  // Site imagery (licensed category stock + customer uploads). Consumed by the
+  // renderer/ingest in Phase 2; bound now (front-loaded with R2 enablement).
+  IMAGES: R2Bucket;
   PREVIEW_HOST: string;
   STRIPE_SECRET_KEY?: string;
   STRIPE_WEBHOOK_SECRET?: string;

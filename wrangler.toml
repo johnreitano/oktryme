@@ -17,6 +17,13 @@ PREVIEW_HOST = "oktryme.com"
 binding = "BUSINESS_KV"
 id = "a71fcb2fcb8145b187b23f86a091ee7b"
 
+# Site imagery (licensed category stock + customer uploads — never Maps photos,
+# §6/§11). Created with: wrangler r2 bucket create maps-website-builder-images.
+# Consumed by the renderer/ingest in Phase 2; binding wired now (front-loaded).
+[[r2_buckets]]
+binding = "IMAGES"
+bucket_name = "maps-website-builder-images"
+
 # Secrets (set via `wrangler secret put <NAME>` — never commit):
 #   STRIPE_SECRET_KEY        sk_test_... (test mode for V3)
 #   STRIPE_WEBHOOK_SECRET    whsec_...

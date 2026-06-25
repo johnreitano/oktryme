@@ -439,7 +439,7 @@ Cheap end-to-end proofs before pipeline build:
 | Phase | Est. dev-days | Note |
 |---|---|---|
 | **0 — Spikes** | ~1 (baseline) | ✅ **Complete** — V1–V5, V2a, dedicated account, and V1-live all verified live (see §8) |
-| **1 — Data layer** | 0.5–1 | schema & KV already exist from spikes; mostly formalizing + domain→handle map + R2 |
+| **1 — Data layer** | 0.5–1 | ✅ **Complete** — KV-canonical `business.json` + runtime validation + `domain→handle` map + `createdAt`; R2 bucket `maps-website-builder-images` created & bound (front-loaded, also unblocks Phases 2–3) |
 | **2 — Site Worker + templates** | 1.5–2.5 | renderer/form done (V4); cost is **template design/breadth** across allowlisted trades |
 | **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails |
 | **4 — Billing + provisioning** | 1.5–2 | Stripe (V3) + provisioning (V1) largely written; cost is portal, Stripe Tax, hardening, V1 live |
@@ -447,7 +447,7 @@ Cheap end-to-end proofs before pipeline build:
 | **6 — AI chat editor** | 2.5–4 | largest: net-new **auth + first frontend** + agent loop (edit core exists from V4) |
 
 1. **Phase 0 — Spikes (V1–V5).** Prove custom-hostname automation, registrar API, Stripe→provision, render/edit loop, form email. Lowest cost, highest risk-reduction.
-2. **Phase 1 — Data layer.** `business.json` schema + Cloudflare KV/D1/R2; handle + domain→handle maps; status fields.
+2. **Phase 1 — Data layer.** ✅ **Complete (2026-06-24).** `business.json` schema (`src/types.ts`) + zero-dep runtime validation (`src/validate.ts`, guards KV reads / future ingest / AI edits); **KV chosen as the canonical store** (D1 deferred to when batch queries appear, Phase 3/5); `handle` + `domain→handle` maps (live in `KVStore`); status enum + `createdAt`/`updatedAt`. **R2 front-loaded:** bucket `maps-website-builder-images` created and bound as `IMAGES` — image read/write code lands in Phase 2, but enabling R2 + widening the runtime token (Workers R2 Storage: Edit) is done, so resource setup won't block Phases 2–3.
 3. **Phase 2 — Site Worker + templates.** Renderer (preview/live), preview banner + CTA, contact form. The product core.
 4. **Phase 3 — Category discovery + ingest + copy.** Run **Step-0 category discovery** first (~1,000-business sample → category allowlist, §1A), then Outscraper ingest + the allowlist / no-`site` / unambiguous-type filters + AI copy generation populating the data store (with guardrails, §7 #5).
 5. **Phase 4 — Billing + provisioning (§5a).** Stripe Checkout/portal/webhooks ($49 + $99 tiers, Stripe Tax) → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live, with idempotent provisioning + subdomain fallback on failure. Done-for-you intake to bridge until the editor ships. **Includes V1-live** (§8) — the first paid Registrar registration, deferred out of Phase 0 so the spikes stay no-cost.
