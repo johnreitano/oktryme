@@ -14,7 +14,8 @@ CF_WORKER_SERVICE=maps-website-builder
 
 # --- V5: Resend (outbound lead email) ---
 RESEND_API_KEY=re_xxx
-LEADS_FROM=OK Try Me <leads@oktryme.com>
+# Quote values with spaces / `<>` so the file is also shell-sourceable (wrangler strips the quotes).
+LEADS_FROM="OK Try Me <leads@oktryme.com>"
 OPS_FALLBACK_EMAIL=ops@oktryme.com
 
 PREVIEW_HOST=oktryme.com

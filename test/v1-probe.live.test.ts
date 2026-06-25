@@ -12,9 +12,11 @@ declare const process: { env: Record<string, string | undefined> };
  *   - V1  — Registrar domains land as a zone in our account (zone read);
  *           Workers Custom Domains are visible/manageable via API (workers read).
  *
- * Read-only by construction: the token's Registrar scope is `Read`, so any
- * registration call would 403. No PUT/POST is made here. The write path
- * (attach → DNS + SSL) is exercised separately before V1-live (Phase 4).
+ * Read-only by construction: only GETs + the read-only `domain-check` POST are
+ * made here — no register/attach call. (The runtime token now carries Registrar
+ * Admin + Zone/DNS/SSL write for the real write path, so safety here comes from
+ * what this probe does, not from the token scope.) The write path
+ * (register → attach → DNS + SSL) is exercised separately in V1-live (Phase 4).
  *
  * Skips automatically when CF creds aren't present (CI / no-cred runs).
  */
@@ -92,22 +94,23 @@ describe.skipIf(!creds)("V1/V2 live read-only probe", () => {
     expect(available).toBe(false);
   });
 
-  it("V1: oktryme.com resolves to a zone in our account (zone read)", async () => {
-    const { status, body } = await cfGet(
-      `/zones?name=oktryme.com&account.id=${creds!.accountId}`,
-    );
-    console.log("[V1] zones?name=oktryme.com status:", status);
+  it("V1: zone-read works on the dedicated account (zone read)", async () => {
+    // Dedicated account starts intentionally empty: oktryme.com still lives in the
+    // old account (Phase B inter-account transfer), and a throwaway .com registered
+    // in V1-live is what first populates a zone here. So we assert the zone-read
+    // token scope works, not that any specific zone exists yet.
+    const { status, body } = await cfGet(`/zones?account.id=${creds!.accountId}`);
+    console.log("[V1] zones status:", status);
     console.log(
       "[V1] zone result:",
       JSON.stringify(body.result?.map((z: any) => ({ id: z.id, name: z.name, status: z.status })), null, 2),
     );
     expect(status).toBeLessThan(400);
     expect(body.success).toBe(true);
-    expect(Array.isArray(body.result) && body.result.length).toBeGreaterThan(0);
-    expect(body.result[0].name).toBe("oktryme.com");
+    expect(Array.isArray(body.result)).toBe(true);
   });
 
-  it("V1: Workers Custom Domains are listable via API (workers read)", async () => {
+  it("V1: Workers Custom Domains are listable + the account is clean (workers read)", async () => {
     const { status, body } = await cfGet(
       `/accounts/${creds!.accountId}/workers/domains`,
     );
@@ -119,5 +122,8 @@ describe.skipIf(!creds)("V1/V2 live read-only probe", () => {
     expect(status).toBeLessThan(400);
     expect(body.success).toBe(true);
     expect(Array.isArray(body.result)).toBe(true);
+    // The point of the dedicated account: zero pre-existing custom domains (no
+    // unrelated `multiplytech` domains the token could touch). Starts empty.
+    expect(body.result.length).toBe(0);
   });
 });

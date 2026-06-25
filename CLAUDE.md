@@ -11,6 +11,10 @@ Treat these two docs as the source of truth — don't re-derive state from `git 
 - **`SPIKES.md` → "Resume here"** — current build status and the exact next actions (operational pick-up point).
 - **`PLAN.md`** — strategy, unit economics, and decisions (§-numbered; e.g. §5a provisioning, §11 risks).
 
+## Do external config directly on my behalf
+- For anything reachable via CLI or API (`wrangler`, Cloudflare/Stripe API, DNS, config edits), **just do it** once auth exists — don't hand me commands to run.
+- Only hand back what you truly can't do, as a single concrete action: **(1)** interactive browser auth (e.g. `wrangler login`), **(2)** spending money / irreversible actions (do the call, but confirm specifics first), **(3)** decisions only I can make.
+
 ## Secrets
 - All secrets live in **`.dev.vars`** (gitignored): Stripe, Resend, and — when set — Cloudflare.
 - **Never paste secret values into chat, and never commit them.** Reference key names only.

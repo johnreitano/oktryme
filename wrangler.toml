@@ -3,8 +3,8 @@
 name = "maps-website-builder"
 main = "src/index.ts"
 compatibility_date = "2024-09-01"
-# Jreitano@gmail.com account (holds oktryme.com). Account IDs are not secret.
-account_id = "734b321b1df2945df836ce873a7d2893"
+# Oktrymedigital@gmail.com account (dedicated maps-website-builder account). Account IDs are not secret.
+account_id = "684b0476188597fc51262d99cc67e01f"
 
 # Host that serves preview sites and the {handle}.<preview-host> live fallback.
 [vars]
@@ -15,7 +15,7 @@ PREVIEW_HOST = "oktryme.com"
 # then paste the returned id below.
 [[kv_namespaces]]
 binding = "BUSINESS_KV"
-id = "c09e4b078a5146738faa5d1d52a2b1c5"
+id = "a71fcb2fcb8145b187b23f86a091ee7b"
 
 # Secrets (set via `wrangler secret put <NAME>` — never commit):
 #   STRIPE_SECRET_KEY        sk_test_... (test mode for V3)
