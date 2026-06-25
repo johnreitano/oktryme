@@ -406,7 +406,7 @@ Prep + constraints: `oktryme.com` registered 2013 (>10-day inter-account-transfe
 Cheap end-to-end proofs before pipeline build:
 
 - [~] **V1 — Domain → live automation:** **read path verified LIVE (2026-06-24)** with a scoped token — `domain-check`, zone read (`oktryme.com` → active zone in account), and Workers Custom Domains list all 200. Surfaced + fixed a `domain-check` parser bug (GA shape is `result.domains[]`/`registrable`, not `result[]`/`available` — `isAvailable` had returned `true` for everything). Read path **re-verified on the new dedicated account (2026-06-24)** — token works; account confirmed clean (zero zones, zero custom domains). **Remaining: the attach→DNS→SSL write path** → see V1-live. `test/v1-probe.live.test.ts`, `src/provisioning/cloudflare.ts`.
-- [ ] **V1-live — Real domain registration (deferred to Phase 4, §5a):** register a throwaway real `.com` via the Registrar API → attach Workers Custom Domain → SSL active + Worker serves it + `whois` shows the redacted LLC contact (not personal). ~$10.46/yr at cost (confirmed), auto-renews — run when Phase 4 provisioning hardening is underway.
+- [x] **V1-live — Real domain registration (verified LIVE 2026-06-24):** registered **`assessmybusiness.app`** ($14.20/yr) by driving the **real `CloudflareProvisioner`** end-to-end → zone auto-created + active → Workers Custom Domain attached (apex + `www`) → auto DNS (proxied) → **Universal SSL active in ~30s** → Worker **serves the live site at the apex over valid TLS (HTTP 200, no preview banner)**. WHOIS **redacted** (RDAP shows no registrant); private registrant = **Multiply Technologies LLC**; auto-renew on. **Finding:** `www.` is attached + cert-covered but 404s — the Worker lacks the `www → apex` redirect / `www` domain-map (§5a C.3 spec); **Phase 4 Worker-logic to-do.** ⚠️ Domain **auto-renews (~$14.20/yr)** and the Registrar lifecycle API can't disable it (§11) — turn off auto-renew / delete in the dashboard if not keeping it.
 - [~] **Dedicated account migration (decided 2026-06-24):** account **stood up** — Registrar enabled, scoped token minted, `BUSINESS_KV` created, Worker deployed, read-probe green on the clean account (full detail + rationale in **§5b**). **Remaining: the `oktryme.com` inter-account cutover** (deferred by design — see §5b; not a V1-live blocker).
 - [x] **V2 — Cloudflare Registrar API fit (done 2026-06-24):** **GA / self-service** (no beta waitlist; standard custom token w/ `Account → Registrar: Domains`). `domain-check` confirms `.com` `registrable` at **$10.46 registration / $10.46 renewal** (USD, at-cost, no markup). Year-2 renewal: auto-renew + dashboard for now — Registrar *lifecycle* API (renew/transfer/contact) still a gap (§11); keep a third-party registrar API as fallback.
 - [x] **V2a — Private registrant contact info (done 2026-06-24):** Cloudflare registrant/ICANN contact updated to the business identity — role email, business/VoIP phone, non-residential address — with WHOIS redaction on, before registering customer domains at scale (§5a registrant contact policy).
@@ -421,7 +421,7 @@ Cheap end-to-end proofs before pipeline build:
 | Item | Verdict |
 |---|---|
 | Self-hosted static rendering covers service-business needs (lead-gen + form) | ✅ Yes (no cart/booking in MVP) |
-| Workers Custom Domain attaches our-account domains + auto DNS/SSL programmatically | ⏳ Verify V1 |
+| Workers Custom Domain attaches our-account domains + auto DNS/SSL programmatically | ✅ Verified live (V1-live, 2026-06-24) — apex serves over edge SSL; `www→apex` redirect is a Phase 4 to-do |
 | New-domain registration automatable via Cloudflare Registrar API (~$10/yr at cost) | ✅ Now possible (beta, Apr 2026) — confirm TLDs + renewal path (V2) |
 | Stripe subscription + webhook drives activation/provisioning | ✅ Verified live (test mode, 2026-06-24) |
 | Preview & live share one renderer (no drift) | ✅ By design — confirm V4 |
@@ -438,7 +438,7 @@ Cheap end-to-end proofs before pipeline build:
 
 | Phase | Est. dev-days | Note |
 |---|---|---|
-| **0 — Spikes** | ~1 (baseline) | V2–V5 + dedicated account done; **only V1-live remains** (paid throwaway-domain write path — see §5b/§8) |
+| **0 — Spikes** | ~1 (baseline) | ✅ **Complete** — V1–V5, V2a, dedicated account, and V1-live all verified live (see §8) |
 | **1 — Data layer** | 0.5–1 | schema & KV already exist from spikes; mostly formalizing + domain→handle map + R2 |
 | **2 — Site Worker + templates** | 1.5–2.5 | renderer/form done (V4); cost is **template design/breadth** across allowlisted trades |
 | **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails |
