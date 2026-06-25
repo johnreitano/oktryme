@@ -1,18 +1,19 @@
 # Phase 0 — Spikes status
 
-> **Scope & lifespan.** This is a *temporary Phase-0 build log*. **`PLAN.md` is the single source of truth** for strategy, phases, and forward tasks — the dedicated-account / `oktryme.com` cutover now lives in **PLAN §5b**. This file **retires when Phase 0 closes**; the only spike left is **V1-live**. If this doc and PLAN disagree, PLAN wins.
+> **Scope & lifespan.** This is a *temporary Phase-0 build log*. **`PLAN.md` is the single source of truth** for strategy, phases, and forward tasks — the dedicated-account / `oktryme.com` cutover lives in **PLAN §5b**. If this doc and PLAN disagree, PLAN wins.
+> **✅ Phase 0 is COMPLETE (2026-06-24)** — all spikes verified live (V1–V5, V2a, dedicated account, V1-live). **This file is now ready to retire**; future work tracks in PLAN.md.
 
 Cheap end-to-end proofs before the pipeline build (PLAN.md §8). The render/edit
 and billing/provisioning/email code is **written and unit-tested against the
-real Cloudflare, Stripe, and Resend APIs (mocked fetch)**. V2–V5 + the dedicated
-account are verified/done; **only the V1-live write path remains** (paid throwaway
-`.com` → attach → SSL).
+real Cloudflare, Stripe, and Resend APIs (mocked fetch)**, and the full
+register→attach→DNS→SSL→live-render write path is now **verified live** (V1-live:
+`assessmybusiness.app`).
 
 | Spike | What it proves | Status |
 |---|---|---|
 | **V4 — Render + edit loop** | Worker renders a real `business.json`; a structured edit re-renders instantly (preview = live engine, no drift) | ✅ **Done** — `src/render`, `src/edit`; `test/render.test.ts`, `test/edit-loop.test.ts` |
 | **V3 — Stripe → provisioning** | Checkout subscription → signed webhook → status flip → domain provision, idempotent | ✅ **Verified LIVE (test mode, 2026-06-24)** — `/convert/{handle}` created a real `cs_test_…` session; completed checkout → webhook `200 OK` (signature verified) → `joes-auto` flipped `preview→active` with Stripe customer/subscription IDs + stub-provisioned domain. Idempotent across the event burst. `src/billing/stripe.ts`, `src/provisioning` |
-| **V1 — Domain → live automation** | Register via Cloudflare Registrar API → Workers Custom Domain → SSL | 🟡 **Read path verified LIVE (2026-06-24); write path pending dedicated account.** Live token confirmed Registrar read, zone read (oktryme.com → active zone), Workers domains list. Found+fixed a `domain-check` parser bug. Remaining: attach→DNS→SSL on the new account. `src/provisioning/cloudflare.ts`, `test/v1-probe.live.test.ts` |
+| **V1 — Domain → live automation** | Register via Cloudflare Registrar API → Workers Custom Domain → SSL | ✅ **Verified LIVE (2026-06-24).** Read path proved + `domain-check` parser bug fixed; then **V1-live** drove the real `CloudflareProvisioner` to register `assessmybusiness.app` → zone active → attach apex+`www` → auto DNS → Universal SSL active (~30s) → **Worker serves live site at apex (HTTP 200, valid TLS, no banner)**. WHOIS redacted; registrant = Multiply Technologies LLC. Finding: `www→apex` redirect is a Phase 4 Worker to-do. See PLAN §8. `src/provisioning/cloudflare.ts` |
 | **V2 — Registrar API fit / TLDs** | Confirm API registers .com at cost; decide renewal path | ✅ **Verified LIVE (2026-06-24)** — Registrar API is **GA** (no beta); `.com` `registrable` at **$10.46 reg / $10.46 renewal** (USD, at-cost). Renewal *automation* via API still a lifecycle gap (PLAN §11) — dashboard/auto-renew for now |
 | **V5 — Form email deliverability** | Lead email lands in inbox (SPF/DKIM) | ✅ **Verified LIVE (2026-06-24)** — `POST /lead/{handle}` → Resend → **landed in Gmail inbox** from `leads@oktryme.com` (domain verified in Resend, DKIM/SPF). `src/lead/resend.ts`; `test/email-and-checkout.test.ts` |
 
