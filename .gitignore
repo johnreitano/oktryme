@@ -2,6 +2,7 @@ node_modules/
 dist/
 .wrangler/
 coverage/
+ingest-output/
 .dev.vars
 *.log
 .DS_Store
