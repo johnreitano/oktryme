@@ -1,5 +1,6 @@
 import { KVStore } from "./store.js";
 import { renderSite } from "./render/renderer.js";
+import { serveImage } from "./images/r2.js";
 import { handleLead, LogSender, type LeadEmailSender } from "./lead/form.js";
 import { ResendSender } from "./lead/resend.js";
 import {
@@ -74,6 +75,15 @@ export default {
     const isPreviewHost =
       host === env.PREVIEW_HOST || host === `www.${env.PREVIEW_HOST}`;
 
+    // ---- www → apex 301 (live custom domains only) ----
+    // Custom-domain attach covers www. + apex with one cert, but the Worker
+    // must send www to the canonical apex (closes the V1-live `www` 404 finding,
+    // §5a C.3 / §8). The preview host's own www is left to the path routes.
+    if (host.startsWith("www.") && !isPreviewHost) {
+      url.hostname = host.slice(4);
+      return Response.redirect(url.toString(), 301);
+    }
+
     // ---- Stripe webhook ----
     if (req.method === "POST" && url.pathname === "/stripe/webhook") {
       const body = await req.text();
@@ -140,6 +150,13 @@ export default {
       const handle = scanMatch[1];
       // TODO: log scan event (handle, ts, UA) for attribution (§1C).
       return Response.redirect(`https://${env.PREVIEW_HOST}/p/${handle}`, 302);
+    }
+
+    // ---- Site imagery from R2 (category stock / AI-generated / uploads) ----
+    const imgMatch = url.pathname.match(/^\/img\/(.+)$/);
+    if (req.method === "GET" && imgMatch) {
+      const key = imgMatch[1].split("/").map(decodeURIComponent).join("/");
+      return serveImage(env.IMAGES, key);
     }
 
     // ---- Preview render ----
