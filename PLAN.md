@@ -387,8 +387,10 @@ Not the MVP default (we register fresh). When needed later: either (a) **Cloudfl
 
 Cheap end-to-end proofs before pipeline build:
 
-- [ ] **V1 — Domain → live automation:** register a test domain via the **Cloudflare Registrar API** → attach as a **Workers Custom Domain** (auto DNS + edge cert) → SSL active, Worker serves it — fully unattended, minutes not hours. (Confirm Registrar domains land as a zone in our account and Workers Custom Domains can be set via API.)
-- [ ] **V2 — Cloudflare Registrar API fit:** confirm the beta API registers our target TLDs (.com etc.) unattended at cost, and decide the **year-2 renewal** path (dashboard now vs. API when it lands). Keep a third-party registrar API as fallback.
+- [~] **V1 — Domain → live automation:** **read path verified LIVE (2026-06-24)** with a scoped token — `domain-check`, zone read (`oktryme.com` → active zone in account), and Workers Custom Domains list all 200. Surfaced + fixed a `domain-check` parser bug (GA shape is `result.domains[]`/`registrable`, not `result[]`/`available` — `isAvailable` had returned `true` for everything). **Remaining: the attach→DNS→SSL write path**, run on the dedicated account (below) → see V1-live. `test/v1-probe.live.test.ts`, `src/provisioning/cloudflare.ts`.
+- [ ] **V1-live — Real domain registration (deferred to Phase 4, §5a):** register a throwaway real `.com` via the Registrar API → attach Workers Custom Domain → SSL active + Worker serves it + `whois` shows the redacted LLC contact (not personal). ~$10.46/yr at cost (confirmed), auto-renews — run when Phase 4 provisioning hardening is underway.
+- [ ] **Dedicated account migration (decided 2026-06-24):** stand up a separate Cloudflare account (same login) for this project's worker + customer domains + `oktryme.com`, isolating from the existing `multiplytech` worker's live domains. Required because a dynamic-zone token must be scoped "all zones from an account" — the account is the only boundary. `oktryme.com` moves via inter-account transfer (registered 2013 → >10-day gate clear; needs lock release + DNSSEC off; 30-day post-lock).
+- [x] **V2 — Cloudflare Registrar API fit (done 2026-06-24):** **GA / self-service** (no beta waitlist; standard custom token w/ `Account → Registrar: Domains`). `domain-check` confirms `.com` `registrable` at **$10.46 registration / $10.46 renewal** (USD, at-cost, no markup). Year-2 renewal: auto-renew + dashboard for now — Registrar *lifecycle* API (renew/transfer/contact) still a gap (§11); keep a third-party registrar API as fallback.
 - [x] **V2a — Private registrant contact info (done 2026-06-24):** Cloudflare registrant/ICANN contact updated to the business identity — role email, business/VoIP phone, non-residential address — with WHOIS redaction on, before registering customer domains at scale (§5a registrant contact policy).
 - [ ] **V3 — Stripe → provisioning:** Checkout subscription → webhook → status flip → domain provision, end-to-end on a test card.
 - [ ] **V4 — Render + edit loop:** Worker renders a real `business.json`; an edit to the JSON re-renders instantly (preview = live engine).
@@ -414,11 +416,23 @@ Cheap end-to-end proofs before pipeline build:
 
 ## 10. Suggested build phases
 
+> **Effort estimates (focused dev-days).** "1 work unit" = the hands-on human time Phase 0 took (~5–6 hrs ≈ **1 focused dev-day**); all estimates below are expressed in those units at the same AI-assisted velocity. Two things shape them: (1) **the spikes are prototypes of later phases** — Phase 0 already wrote and unit-tested the renderer (V4), edit engine (V4), Stripe webhook flow (V3), provisioning client (V1), and email sender (V5), so Phases 2 and 4 are partly done; (2) **everything so far is backend Worker code** — there's no auth or frontend yet, which is why Phase 6 is the outlier. **Total build (Phases 1–6) ≈ 9–13 dev-days (midpoint ~11), ~2–3 calendar weeks.** Excluded: the Phase 5a validation test is operational/calendar time (mailing + calling), not dev-days.
+
+| Phase | Est. dev-days | Note |
+|---|---|---|
+| **0 — Spikes** | ~1 (baseline) | ~80% done; V1/V2 remain (blocked on Cloudflare creds) |
+| **1 — Data layer** | 0.5–1 | schema & KV already exist from spikes; mostly formalizing + domain→handle map + R2 |
+| **2 — Site Worker + templates** | 1.5–2.5 | renderer/form done (V4); cost is **template design/breadth** across allowlisted trades |
+| **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails |
+| **4 — Billing + provisioning** | 1.5–2 | Stripe (V3) + provisioning (V1) largely written; cost is portal, Stripe Tax, hardening, V1 live |
+| **5 — Postcard outreach** | 1–1.5 (dev) | + Phase 5a validation test = operational/calendar time, not dev-days |
+| **6 — AI chat editor** | 2.5–4 | largest: net-new **auth + first frontend** + agent loop (edit core exists from V4) |
+
 1. **Phase 0 — Spikes (V1–V5).** Prove custom-hostname automation, registrar API, Stripe→provision, render/edit loop, form email. Lowest cost, highest risk-reduction.
 2. **Phase 1 — Data layer.** `business.json` schema + Cloudflare KV/D1/R2; handle + domain→handle maps; status fields.
 3. **Phase 2 — Site Worker + templates.** Renderer (preview/live), preview banner + CTA, contact form. The product core.
 4. **Phase 3 — Category discovery + ingest + copy.** Run **Step-0 category discovery** first (~1,000-business sample → category allowlist, §1A), then Outscraper ingest + the allowlist / no-`site` / unambiguous-type filters + AI copy generation populating the data store (with guardrails, §7 #5).
-5. **Phase 4 — Billing + provisioning (§5a).** Stripe Checkout/portal/webhooks ($49 + $99 tiers, Stripe Tax) → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live, with idempotent provisioning + subdomain fallback on failure. Done-for-you intake to bridge until the editor ships.
+5. **Phase 4 — Billing + provisioning (§5a).** Stripe Checkout/portal/webhooks ($49 + $99 tiers, Stripe Tax) → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live, with idempotent provisioning + subdomain fallback on failure. Done-for-you intake to bridge until the editor ships. **Includes V1-live** (§8) — the first paid Registrar registration, deferred out of Phase 0 so the spikes stay no-cost.
 6. **Phase 5 — Postcard outreach (§1C).** PostGrid/Lob templates + batch-send + QR/tracking + attribution. **Phase 5a = the gating ~2–5k-postcard validation test** (§7 #8) — run *before* any scale spend.
 7. **Phase 6 — AI chat editor (self-serve).** Login/auth + chat UI + schema-validated AI edit agent → preview/publish. Fast-follow, not funnel-gating: launch managed-first, then ship the editor to cap edit-labor as the base scales and to make the $49 tier sustainable. _Build before customer count makes manual edits painful._ **The detailed design — the `business.json` schema, the allowed AI edit operations, and the preview/publish/undo flow — will be fleshed out at the start of this phase.**
 
