@@ -7,9 +7,8 @@ flip the site **live on the customer's own domain**. Self-hosted on a single
 legal entity: Multiply Technologies LLC.
 
 ## Load state at the start of every session
-Treat these two docs as the source of truth — don't re-derive state from `git log`:
-- **`SPIKES.md` → "Resume here"** — current build status and the exact next actions (operational pick-up point).
-- **`PLAN.md`** — strategy, unit economics, and decisions (§-numbered; e.g. §5a provisioning, §11 risks).
+**`PLAN.md` is the single source of truth** — strategy, unit economics, decisions, phases, and the forward task list (§-numbered; e.g. §5a provisioning, §5b infra & `oktryme.com` cutover, §8 spikes, §10 phases, §11 risks). Don't re-derive state from `git log`.
+- **`SPIKES.md`** is a **temporary Phase-0 build log** (the cheap end-to-end proofs) — the operational pick-up point *only while Phase 0 is open*, and it **retires once Phase 0 closes** (only V1-live remains). For anything forward-looking, **PLAN.md wins**; if the two disagree, fix `SPIKES.md` to match `PLAN.md`.
 
 ## Do external config directly on my behalf
 - For anything reachable via CLI or API (`wrangler`, Cloudflare/Stripe API, DNS, config edits), **just do it** once auth exists — don't hand me commands to run.

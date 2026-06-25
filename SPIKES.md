@@ -1,9 +1,12 @@
 # Phase 0 — Spikes status
 
+> **Scope & lifespan.** This is a *temporary Phase-0 build log*. **`PLAN.md` is the single source of truth** for strategy, phases, and forward tasks — the dedicated-account / `oktryme.com` cutover now lives in **PLAN §5b**. This file **retires when Phase 0 closes**; the only spike left is **V1-live**. If this doc and PLAN disagree, PLAN wins.
+
 Cheap end-to-end proofs before the pipeline build (PLAN.md §8). The render/edit
-and billing/provisioning/email code is now **written and unit-tested against the
-real Cloudflare, Stripe, and Resend APIs (mocked fetch)**. V3 and V5 are now
-verified live; **only V1/V2 remain** (need Cloudflare credentials).
+and billing/provisioning/email code is **written and unit-tested against the
+real Cloudflare, Stripe, and Resend APIs (mocked fetch)**. V2–V5 + the dedicated
+account are verified/done; **only the V1-live write path remains** (paid throwaway
+`.com` → attach → SSL).
 
 | Spike | What it proves | Status |
 |---|---|---|
