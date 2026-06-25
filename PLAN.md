@@ -474,13 +474,13 @@ Cheap end-to-end proofs before pipeline build:
   - [x] `www→apex` 301 redirect (closes the V1-live `www` 404 finding, §8)
   - **Decision (imagery generation):** real per-trade images are generated in **Phase 3 using Google Nano Banana Pro** (Gemini API) — automatable (unlike Artlist's web-only tool); only gate is a **Gemini API key** (Worker secret), and the R2 serve pipeline already receives the assets.
 
-- [ ] **Phase 3 — Category discovery + ingest + copy.** Populate the data store from real Maps data, with copy + imagery.
-  - [ ] **Step-0 category discovery** — ~1,000-business sample → category allowlist + exclude list (§1A)
-  - [ ] Outscraper ingest (text/factual fields only — no Maps photos)
-  - [ ] Filters — allowlist / no-`site` / unambiguous-type (§1A)
-  - [ ] AI copy generation + guardrails (verifiable facts only, §7 #5)
-  - [ ] **Craft the specialized per-trade image prompt** via the 3-step realism workflow in [`image-prompting-process.md`](./image-prompting-process.md) (generate → critique/improve → compress/de-gloss)
-  - [ ] Batch-generate per-trade images with **Nano Banana Pro** → upload to R2, replacing the Phase-2 CSS placeholders
+- [x] **Phase 3 — Category discovery + ingest + copy.** ✅ **Pipeline built & validated end-to-end on live data (2026-06-25).** Keys obtained (Gemini via gcloud CLI on a dedicated `oktryme-maps-website-builder` project w/ a $25 budget alert; Outscraper key via Browser MCP + a $10 prepaid top-up). Decisions locked: **region = Knoxville, TN**; **copy + imagery both via Gemini** (one vendor/key — `gemini-2.5-flash` structured-JSON copy + `gemini-3-pro-image` / Nano Banana Pro for heroes); **validate small first**. Live run: pulled 100 Maps records (auto + HVAC) → **16 no-site survivors (~16% no-site rate)** → Gemini copy → rendered + previewed a real site with a generated hero. 113 tests green. Orchestrated by `npm run ingest -- businesses|images` (`scripts/ingest.ts`). _Operational follow-ons (not dev): the full ~1,000-business Step-0 discovery analysis, larger batches, and the production-R2 hero upload._
+  - [~] **Step-0 category discovery** — **seed allowlist + exclude list shipped & tested** (`src/ingest/allowlist.ts`: 10 Knoxville trades → render themes; chains/poor-fit excluded). The ~1,000-business sample *analysis* that finalizes the list is the operational next step (§1A).
+  - [x] Outscraper ingest (text/factual fields only — no Maps photos/reviews) — `src/ingest/outscraper.ts`: **async submit→poll client validated live**; normalizer handles the real v3 shapes (`website` not `site`, array `working_hours`, `state_code`, `owner_title`≠person).
+  - [x] Filters — allowlist / no-`website` (social/auto pages count as "no real site") / unambiguous-type (§1A) — `src/ingest/filters.ts`, funnel-counted, tested; **measured ~16% no-site at depth 50**.
+  - [x] AI copy generation + guardrails (verifiable facts only, §7 #5) — `src/copy/generate.ts`: Gemini structured-JSON copy, no-fabrication system prompt, `tidyProse` cleanup; **validated live — grounded, no fabricated claims**.
+  - [x] **Craft the specialized per-trade image prompt** via the 3-step realism workflow in [`image-prompting-process.md`](./image-prompting-process.md) (generate → critique/improve → compress/de-gloss) — `src/images/prompts.ts`: documentary-realistic hero prompts per theme (auto/hvac/landscaping/universal) + shared avoid list (no text/logos/faces for clean overlay).
+  - [x] Batch-generate per-trade images with **Nano Banana Pro** → R2 — `src/images/generate.ts`: **all 4 heroes generated live (`gemini-3-pro-image`), loaded to local R2, and confirmed rendering in a preview.** Production-R2 upload is the remaining operational step.
 
 - [ ] **Phase 4 — Billing + provisioning (§5a).** Stripe → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live. **Includes V1-live** (§8) — the first paid Registrar registration, deferred out of Phase 0 so the spikes stay no-cost.
   - [ ] Stripe Checkout + customer portal ($49 + $99 tiers, $49→$99 upgrade)

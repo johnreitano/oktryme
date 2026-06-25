@@ -18,4 +18,9 @@ RESEND_API_KEY=re_xxx
 LEADS_FROM="OK Try Me <leads@oktryme.com>"
 OPS_FALLBACK_EMAIL=ops@oktryme.com
 
+# --- Phase 3: ingest pipeline (used by `npm run ingest`, not the Worker) ---
+OUTSCRAPER_API_KEY=xxx        # Google Maps scrape (per-record cost) — businesses pull
+GEMINI_API_KEY=xxx            # Gemini — drives BOTH AI copy (§7 #5 guardrails) and
+                              # Nano Banana Pro per-trade hero image generation
+
 PREVIEW_HOST=oktryme.com

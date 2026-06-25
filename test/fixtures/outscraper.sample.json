@@ -1,0 +1,65 @@
+[
+  {
+    "name": "Rocky Top Auto Repair",
+    "owner_name": "Dale Whitman",
+    "type": "Auto repair shop",
+    "phone": "+1 865-555-0142",
+    "street": "1820 Sutherland Ave",
+    "city": "Knoxville",
+    "state": "TN",
+    "postal_code": "37919",
+    "description": "Independent shop doing brakes, alignments, and oil changes.",
+    "working_hours": { "Monday": "8AM-5PM", "Tuesday": "8AM-5PM", "Wednesday": "8AM-5PM", "Thursday": "8AM-5PM", "Friday": "8AM-4PM", "Saturday": "Closed", "Sunday": "Closed" },
+    "site": ""
+  },
+  {
+    "name": "Smoky Mountain Heating & Air",
+    "type": "HVAC contractor",
+    "phone": "865-555-0188",
+    "full_address": "5402 Clinton Hwy, Knoxville, TN 37912",
+    "working_hours": { "Monday": "7:30AM-6PM", "Saturday": "9AM-1PM", "Sunday": "Closed" },
+    "site": "https://facebook.com/smokymtnhvac"
+  },
+  {
+    "name": "Volunteer Lawn & Landscape",
+    "owner_name": "Maria Boyd",
+    "type": "Lawn care service",
+    "phone": "865-555-0173",
+    "street": "311 Broadway St",
+    "city": "Knoxville",
+    "state": "TN",
+    "postal_code": "37917",
+    "site": ""
+  },
+  {
+    "name": "Knoxville Toyota",
+    "type": "Car dealership",
+    "phone": "865-555-0100",
+    "street": "10415 Parkside Dr",
+    "city": "Knoxville",
+    "state": "TN",
+    "postal_code": "37922",
+    "site": "https://knoxvilletoyota.com"
+  },
+  {
+    "name": "East Tennessee Plumbing Co",
+    "type": "Plumber",
+    "phone": "865-555-0155",
+    "street": "709 N Central St",
+    "city": "Knoxville",
+    "state": "TN",
+    "postal_code": "37917",
+    "description": "Drain cleaning, water heaters, and repipes.",
+    "site": ""
+  },
+  {
+    "name": "Gay Street Bistro",
+    "type": "Restaurant",
+    "phone": "865-555-0199",
+    "street": "100 Gay St",
+    "city": "Knoxville",
+    "state": "TN",
+    "postal_code": "37902",
+    "site": ""
+  }
+]
