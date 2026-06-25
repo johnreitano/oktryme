@@ -350,6 +350,24 @@ Not the MVP default (we register fresh). When needed later: either (a) **Cloudfl
 
 ---
 
+## 5b. Infrastructure — dedicated Cloudflare account & `oktryme.com` cutover
+
+All of this project's infrastructure lives in a **dedicated Cloudflare account** (`Oktrymedigital@gmail.com's Account`, id `684b0476…`), separate from the personal account that runs the unrelated `multiplytech` worker. **Why dedicated:** a dynamic-zone provisioning token must be scoped "all zones from an account," so the *account* is the only boundary that keeps our runtime token from spanning unrelated live customer domains.
+
+**Stood up (2026-06-24):** account created — login `oktrymedigital@gmail.com`, kept **off-domain on purpose** (auth must not depend on `oktryme.com` email routing, which follows the zone), with `jreitano@gmail.com` added as a break-glass Super Administrator. Registrar enabled (payment profile + Multiply Technologies LLC registrant contact + Domain Registration Agreement). Scoped runtime token `maps-website-builder-runtime` (Registrar Admin + Zone/DNS/SSL/Workers write) in `.dev.vars`. `BUSINESS_KV` namespace created; Worker **deployed** (`maps-website-builder.oktrymedigital.workers.dev`); live read-probe green — the account is **clean** (zero pre-existing custom domains). Email: `hello@`/`leads@`/`ops@`/anything `@oktryme.com` forwards to `oktrymedigital@gmail.com` via a **catch-all** rule (currently in the old account, where `oktryme.com` still lives).
+
+### `oktryme.com` cutover ("Phase B") — deferred by design
+`oktryme.com` (the preview/brand host) still lives in the **old** personal account. It **does not block V1-live** (that uses a throwaway `.com`), and everything depending on it works where it is today. **Trigger to move it: when previews must serve on the brand domain through the new account's Worker** — i.e. as we wire preview serving (Phase 2), and at the latest before mailing real postcards (Phase 5), whose QR links are `oktryme.com/r|p/{handle}`.
+
+Treat it as **one deliberate cutover, not piecemeal** — moving the zone does **not** carry DNS records with it, so in the new account we must re-create:
+1. **Email Routing** (catch-all + any custom rules) — zone-bound.
+2. **Resend SPF/DKIM (+ MX) records** — or `leads@` outbound breaks until re-verified.
+3. The **preview custom-domain attach** for the Worker (apex + `www`).
+
+Prep + constraints: `oktryme.com` registered 2013 (>10-day inter-account-transfer gate clear); release the transfer lock (`clienttransferprohibited`), disable DNSSEC, verify the registrant email, add it as a website on the new account, then submit under **Manage Domain → Configuration** (gaining account approves by email). A **30-day transfer lock applies afterward**, so do it once, intentionally, in a short cutover window.
+
+---
+
 ## 6. Components to build
 
 - **Data pipeline:** Outscraper ingest (**text/factual fields only — no Maps photos**, §1A) → **filter (no `site` URL + unambiguous type, §1A)** → normalize → `business.json` schema → AI copy generation → **imagery from a licensed per-category stock set** (default hero/services images keyed by trade) → store in Cloudflare KV/D1 (+ images to R2). Customer-uploaded photos replace stock post-conversion (via the editor / done-for-you).
@@ -387,13 +405,13 @@ Not the MVP default (we register fresh). When needed later: either (a) **Cloudfl
 
 Cheap end-to-end proofs before pipeline build:
 
-- [~] **V1 — Domain → live automation:** **read path verified LIVE (2026-06-24)** with a scoped token — `domain-check`, zone read (`oktryme.com` → active zone in account), and Workers Custom Domains list all 200. Surfaced + fixed a `domain-check` parser bug (GA shape is `result.domains[]`/`registrable`, not `result[]`/`available` — `isAvailable` had returned `true` for everything). **Remaining: the attach→DNS→SSL write path**, run on the dedicated account (below) → see V1-live. `test/v1-probe.live.test.ts`, `src/provisioning/cloudflare.ts`.
+- [~] **V1 — Domain → live automation:** **read path verified LIVE (2026-06-24)** with a scoped token — `domain-check`, zone read (`oktryme.com` → active zone in account), and Workers Custom Domains list all 200. Surfaced + fixed a `domain-check` parser bug (GA shape is `result.domains[]`/`registrable`, not `result[]`/`available` — `isAvailable` had returned `true` for everything). Read path **re-verified on the new dedicated account (2026-06-24)** — token works; account confirmed clean (zero zones, zero custom domains). **Remaining: the attach→DNS→SSL write path** → see V1-live. `test/v1-probe.live.test.ts`, `src/provisioning/cloudflare.ts`.
 - [ ] **V1-live — Real domain registration (deferred to Phase 4, §5a):** register a throwaway real `.com` via the Registrar API → attach Workers Custom Domain → SSL active + Worker serves it + `whois` shows the redacted LLC contact (not personal). ~$10.46/yr at cost (confirmed), auto-renews — run when Phase 4 provisioning hardening is underway.
-- [ ] **Dedicated account migration (decided 2026-06-24):** stand up a separate Cloudflare account (same login) for this project's worker + customer domains + `oktryme.com`, isolating from the existing `multiplytech` worker's live domains. Required because a dynamic-zone token must be scoped "all zones from an account" — the account is the only boundary. `oktryme.com` moves via inter-account transfer (registered 2013 → >10-day gate clear; needs lock release + DNSSEC off; 30-day post-lock).
+- [~] **Dedicated account migration (decided 2026-06-24):** account **stood up** — Registrar enabled, scoped token minted, `BUSINESS_KV` created, Worker deployed, read-probe green on the clean account (full detail + rationale in **§5b**). **Remaining: the `oktryme.com` inter-account cutover** (deferred by design — see §5b; not a V1-live blocker).
 - [x] **V2 — Cloudflare Registrar API fit (done 2026-06-24):** **GA / self-service** (no beta waitlist; standard custom token w/ `Account → Registrar: Domains`). `domain-check` confirms `.com` `registrable` at **$10.46 registration / $10.46 renewal** (USD, at-cost, no markup). Year-2 renewal: auto-renew + dashboard for now — Registrar *lifecycle* API (renew/transfer/contact) still a gap (§11); keep a third-party registrar API as fallback.
 - [x] **V2a — Private registrant contact info (done 2026-06-24):** Cloudflare registrant/ICANN contact updated to the business identity — role email, business/VoIP phone, non-residential address — with WHOIS redaction on, before registering customer domains at scale (§5a registrant contact policy).
-- [ ] **V3 — Stripe → provisioning:** Checkout subscription → webhook → status flip → domain provision, end-to-end on a test card.
-- [ ] **V4 — Render + edit loop:** Worker renders a real `business.json`; an edit to the JSON re-renders instantly (preview = live engine).
+- [x] **V3 — Stripe → provisioning (verified LIVE, test mode, 2026-06-24):** Checkout subscription → signed webhook → status flip `preview→active` → domain provision, idempotent across the event burst, on a test card.
+- [x] **V4 — Render + edit loop (done):** Worker renders a real `business.json`; a structured edit re-renders instantly (preview = live engine, no drift).
 - [x] **V5 — Form email deliverability (done 2026-06-24):** contact-form POST → Worker → Resend → **landed in Gmail inbox (not spam)** from `leads@oktryme.com` (verified domain, DKIM/SPF). **Outbound via Resend**; **inbound role addresses via Cloudflare Email Routing** — separate systems (§5a D).
 
 ---
@@ -420,7 +438,7 @@ Cheap end-to-end proofs before pipeline build:
 
 | Phase | Est. dev-days | Note |
 |---|---|---|
-| **0 — Spikes** | ~1 (baseline) | ~80% done; V1/V2 remain (blocked on Cloudflare creds) |
+| **0 — Spikes** | ~1 (baseline) | V2–V5 + dedicated account done; **only V1-live remains** (paid throwaway-domain write path — see §5b/§8) |
 | **1 — Data layer** | 0.5–1 | schema & KV already exist from spikes; mostly formalizing + domain→handle map + R2 |
 | **2 — Site Worker + templates** | 1.5–2.5 | renderer/form done (V4); cost is **template design/breadth** across allowlisted trades |
 | **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails |
