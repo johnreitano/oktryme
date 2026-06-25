@@ -372,7 +372,7 @@ Prep + constraints: `oktryme.com` registered 2013 (>10-day inter-account-transfe
 
 - **Data pipeline:** Outscraper ingest (**text/factual fields only — no Maps photos**, §1A) → **filter (no `site` URL + unambiguous type, §1A)** → normalize → `business.json` schema → AI copy generation → **imagery from a licensed per-category stock set** (default hero/services images keyed by trade) → store in Cloudflare KV/D1 (+ images to R2). Customer-uploaded photos replace stock post-conversion (via the editor / done-for-you).
 - **Site Worker (the core):** renders preview (by handle) + live (by custom domain) from templates + `business.json`; serves contact form (`/lead/{handle}`), QR routes (`/r`, `/qr`), and Stripe webhooks.
-- **Templates:** a small set of responsive static site templates (hero, services, reviews, hours/map, contact). Yellow preview banner + CTA shown only in preview mode. **Built (Phase 2):** one renderer skinned by a per-trade theme (auto / HVAC / landscaping + universal fallback); hero imagery is a CSS-placeholder gradient until real images land — **AI-generated per-trade images via Google Nano Banana Pro (Gemini API)** in a deferred post-Phase-2 step, served from R2 at `/img/{key}`.
+- **Templates:** a small set of responsive static site templates (hero, services, reviews, hours/map, contact). Yellow preview banner + CTA shown only in preview mode. **Built (Phase 2):** one renderer skinned by a per-trade theme (auto / HVAC / landscaping + universal fallback); hero imagery is a CSS-placeholder gradient until real images land — **AI-generated per-trade images via Google Nano Banana Pro (Gemini API)** in Phase 3 (incl. crafting the specialized per-trade prompt), served from R2 at `/img/{key}`.
 - **Billing:** Stripe products/prices ($49 + $99 tiers), Checkout, customer portal (self-serve upgrade $49→$99), webhook handler (activate / dunning / cancel).
 - **Provisioning (§5a):** Cloudflare Registrar API client (register; renewals via dashboard until API support lands) + **Workers Custom Domain** automation (auto DNS + cert) + idempotent provisioning job with subdomain fallback + status flip. _(Domain transfer-out is a future stub — §5a F.)_
 - **AI chat editor (self-serve, the $49 tier's core):** customer login/auth → chat UI → an AI agent that makes **structured, schema-validated edits to `business.json`** ("change my hours to 9–5," "add this photo," "rewrite my About") → preview → publish (instant re-render). Guardrails: edits constrained to the schema; no fabricated claims; diff/undo. Natural fit since the site already renders from `business.json`.
@@ -440,19 +440,67 @@ Cheap end-to-end proofs before pipeline build:
 |---|---|---|
 | **0 — Spikes** | ~1 (baseline) | ✅ **Complete** — V1–V5, V2a, dedicated account, and V1-live all verified live (see §8) |
 | **1 — Data layer** | 0.5–1 | ✅ **Complete** — KV-canonical `business.json` + runtime validation + `domain→handle` map + `createdAt`; R2 bucket `maps-website-builder-images` created & bound (front-loaded, also unblocks Phases 2–3) |
-| **2 — Site Worker + templates** | 1.5–2.5 | ✅ **Complete (2026-06-24)** — 3 trade variants (auto / HVAC / landscaping) + universal fallback, CSS-placeholder imagery, R2 serve pipeline (`/img/{key}`), accessible form labels, `www→apex` 301 redirect. **AI imagery generation deferred** to a post-phase step via **Google Nano Banana Pro** (Gemini API) — placeholders ship now, R2 ready to receive assets |
-| **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails |
+| **2 — Site Worker + templates** | 1.5–2.5 | ✅ **Complete (2026-06-24)** — 3 trade variants (auto / HVAC / landscaping) + universal fallback, CSS-placeholder imagery, R2 serve pipeline (`/img/{key}`), accessible form labels, `www→apex` 301 redirect. **AI imagery generation deferred to Phase 3** (incl. crafting the specialized per-trade prompt) via **Google Nano Banana Pro** (Gemini API) — placeholders ship now, R2 ready to receive assets |
+| **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails. **Also: per-trade image generation** (Nano Banana Pro / Gemini API) replacing the Phase-2 CSS placeholders — including **crafting the specialized per-trade image prompt** |
 | **4 — Billing + provisioning** | 1.5–2 | Stripe (V3) + provisioning (V1) largely written; cost is portal, Stripe Tax, hardening, V1 live |
 | **5 — Postcard outreach** | 1–1.5 (dev) | + Phase 5a validation test = operational/calendar time, not dev-days |
 | **6 — AI chat editor** | 2.5–4 | largest: net-new **auth + first frontend** + agent loop (edit core exists from V4) |
 
-1. **Phase 0 — Spikes (V1–V5).** Prove custom-hostname automation, registrar API, Stripe→provision, render/edit loop, form email. Lowest cost, highest risk-reduction.
-2. **Phase 1 — Data layer.** ✅ **Complete (2026-06-24).** `business.json` schema (`src/types.ts`) + zero-dep runtime validation (`src/validate.ts`, guards KV reads / future ingest / AI edits); **KV chosen as the canonical store** (D1 deferred to when batch queries appear, Phase 3/5); `handle` + `domain→handle` maps (live in `KVStore`); status enum + `createdAt`/`updatedAt`. **R2 front-loaded:** bucket `maps-website-builder-images` created and bound as `IMAGES` — image read/write code lands in Phase 2, but enabling R2 + widening the runtime token (Workers R2 Storage: Edit) is done, so resource setup won't block Phases 2–3.
-3. **Phase 2 — Site Worker + templates.** ✅ **Complete (2026-06-24).** Renderer (preview/live), preview banner + CTA, and contact form were built in V4; Phase 2 added **trade-specific template variants** — a one-renderer/many-skins theme system (`src/render/themes.ts`) that picks **Auto Repair / HVAC / Landscaping** from the business category, with a neutral **universal** fallback for everything else (the starting set ahead of Phase 3 category discovery, §7 #2). Imagery uses **CSS-placeholder hero gradients** per trade, honoring an explicit `images.hero` (URL passthrough or R2 key → served at `/img/{key}` from the `IMAGES` bucket; `src/images/r2.ts`). Accessibility: visually-hidden form labels + focus-visible styles. The **`www→apex` 301 redirect** (the V1-live `www` 404 finding, §8) shipped here. **Decision (imagery generation):** real per-trade hero/section images are generated in a **deferred post-Phase-2 step using Google Nano Banana Pro** (Gemini's Pro image model) via the **Gemini API** — which, unlike Artlist's web-only tool, can be fully automated; its only gate is a **Gemini API key** (Worker secret), and the R2 serve pipeline is already in place to receive the assets.
-4. **Phase 3 — Category discovery + ingest + copy.** Run **Step-0 category discovery** first (~1,000-business sample → category allowlist, §1A), then Outscraper ingest + the allowlist / no-`site` / unambiguous-type filters + AI copy generation populating the data store (with guardrails, §7 #5).
-5. **Phase 4 — Billing + provisioning (§5a).** Stripe Checkout/portal/webhooks ($49 + $99 tiers, Stripe Tax) → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live, with idempotent provisioning + subdomain fallback on failure. Done-for-you intake to bridge until the editor ships. **Includes V1-live** (§8) — the first paid Registrar registration, deferred out of Phase 0 so the spikes stay no-cost.
-6. **Phase 5 — Postcard outreach (§1C).** PostGrid/Lob templates + batch-send + QR/tracking + attribution. **Phase 5a = the gating ~2–5k-postcard validation test** (§7 #8) — run *before* any scale spend.
-7. **Phase 6 — AI chat editor (self-serve).** Login/auth + chat UI + schema-validated AI edit agent → preview/publish. Fast-follow, not funnel-gating: launch managed-first, then ship the editor to cap edit-labor as the base scales and to make the $49 tier sustainable. _Build before customer count makes manual edits painful._ **The detailed design — the `business.json` schema, the allowed AI edit operations, and the preview/publish/undo flow — will be fleshed out at the start of this phase.**
+> **Progress checklist.** Check a box when its task is done. A phase box is checked only when all its sub-tasks are. (Spike-level boxes also live in §8.)
+
+- [x] **Phase 0 — Spikes (V1–V5).** Prove custom-hostname automation, registrar API, Stripe→provision, render/edit loop, form email. Lowest cost, highest risk-reduction.
+  - [x] V1 — domain→live read path verified
+  - [x] V1-live — real registration → attach → DNS → SSL → live render
+  - [x] V2 — Cloudflare Registrar API fit (GA, .com at cost)
+  - [x] V2a — private registrant contact (business identity, WHOIS redaction)
+  - [x] V3 — Stripe Checkout → signed webhook → provisioning (idempotent)
+  - [x] V4 — render + structured-edit loop
+  - [x] V5 — form email deliverability (Resend → inbox)
+  - [x] Dedicated Cloudflare account stood up (token, KV, Worker deployed)
+
+- [x] **Phase 1 — Data layer.** ✅ **Complete (2026-06-24).** **KV chosen as the canonical store** (D1 deferred to when batch queries appear, Phase 3/5).
+  - [x] `business.json` schema (`src/types.ts`)
+  - [x] Zero-dep runtime validation (`src/validate.ts`) guarding KV reads / future ingest / AI edits
+  - [x] `handle` + `domain→handle` maps (in `KVStore`)
+  - [x] Status enum + `createdAt`/`updatedAt`
+  - [x] **R2 front-loaded:** bucket `maps-website-builder-images` created + bound as `IMAGES`, runtime token widened (Workers R2 Storage: Edit) — unblocks Phases 2–3
+
+- [x] **Phase 2 — Site Worker + templates.** ✅ **Complete (2026-06-24).** Renderer (preview/live), preview banner + CTA, and contact form were built in V4; Phase 2 added the template breadth + imagery pipeline.
+  - [x] Trade-theme system (`src/render/themes.ts`) — Auto / HVAC / Landscaping + **universal** fallback, chosen from the business category (§7 #2)
+  - [x] Renderer applies the theme via CSS custom properties (one renderer, many skins → no preview/live drift)
+  - [x] CSS-placeholder hero gradients honoring an explicit `images.hero`
+  - [x] R2 serve pipeline — `/img/{key}` + `src/images/r2.ts` (URL passthrough vs R2 key)
+  - [x] Accessibility — visually-hidden form labels + focus-visible styles
+  - [x] `www→apex` 301 redirect (closes the V1-live `www` 404 finding, §8)
+  - **Decision (imagery generation):** real per-trade images are generated in **Phase 3 using Google Nano Banana Pro** (Gemini API) — automatable (unlike Artlist's web-only tool); only gate is a **Gemini API key** (Worker secret), and the R2 serve pipeline already receives the assets.
+
+- [ ] **Phase 3 — Category discovery + ingest + copy.** Populate the data store from real Maps data, with copy + imagery.
+  - [ ] **Step-0 category discovery** — ~1,000-business sample → category allowlist + exclude list (§1A)
+  - [ ] Outscraper ingest (text/factual fields only — no Maps photos)
+  - [ ] Filters — allowlist / no-`site` / unambiguous-type (§1A)
+  - [ ] AI copy generation + guardrails (verifiable facts only, §7 #5)
+  - [ ] **Craft the specialized per-trade image prompt** via the 3-step realism workflow in [`image-prompting-process.md`](./image-prompting-process.md) (generate → critique/improve → compress/de-gloss)
+  - [ ] Batch-generate per-trade images with **Nano Banana Pro** → upload to R2, replacing the Phase-2 CSS placeholders
+
+- [ ] **Phase 4 — Billing + provisioning (§5a).** Stripe → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live. **Includes V1-live** (§8) — the first paid Registrar registration, deferred out of Phase 0 so the spikes stay no-cost.
+  - [ ] Stripe Checkout + customer portal ($49 + $99 tiers, $49→$99 upgrade)
+  - [ ] Stripe Tax (US SaaS sales tax from day one)
+  - [ ] Webhook handler hardening — activate / dunning / cancel
+  - [ ] Provisioning job — register → attach custom domain → auto DNS+SSL, idempotent + `{handle}.oktryme.com` subdomain fallback on failure
+  - [ ] Done-for-you intake (bridge until the editor ships)
+
+- [ ] **Phase 5 — Postcard outreach (§1C).** PostGrid/Lob templates + batch-send + QR/tracking + attribution.
+  - [ ] Postcard front/back templates (merge vars + QR)
+  - [ ] Batch-send script (idempotent by `handle`) + delivery webhooks → `mail_status`
+  - [ ] QR/tracking routes (`/r/{handle}` scan log, `/qr/{handle}.png`)
+  - [ ] **Phase 5a — gating ~2–5k-postcard validation test** (§7 #8), run *before* any scale spend (operational/calendar time, not dev-days)
+
+- [ ] **Phase 6 — AI chat editor (self-serve).** Fast-follow, not funnel-gating: launch managed-first, then ship the editor to cap edit-labor as the base scales. _Build before customer count makes manual edits painful._
+  - [ ] Detailed design — `business.json` edit schema, allowed AI edit operations, preview/publish/undo flow (fleshed out at phase start)
+  - [ ] Customer login/auth (net-new)
+  - [ ] Chat UI (first frontend)
+  - [ ] Schema-validated AI edit agent loop
+  - [ ] Preview → publish (instant re-render) with diff/undo
 
 ---
 
