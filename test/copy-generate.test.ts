@@ -1,9 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
-import type Anthropic from "@anthropic-ai/sdk";
+import { describe, expect, it } from "vitest";
 import {
   applyCopyToRecord,
   buildCopyUserPrompt,
-  COPY_MODEL,
   factsFromRecord,
   generateCopy,
   parseCopyResponse,
@@ -24,10 +22,9 @@ const facts: CopyFacts = {
   description: "Independent garage.",
 };
 
-function messageWithText(text: string): Anthropic.Message {
-  return {
-    content: [{ type: "text", text }],
-  } as unknown as Anthropic.Message;
+/** A Gemini generateContent response whose single text part is `json`. */
+function geminiBody(json: string): unknown {
+  return { candidates: [{ content: { parts: [{ text: json }] } }] };
 }
 
 describe("buildCopyUserPrompt", () => {
@@ -43,9 +40,9 @@ describe("buildCopyUserPrompt", () => {
 });
 
 describe("parseCopyResponse", () => {
-  it("parses structured about + services", () => {
+  it("parses structured about + services from a Gemini body", () => {
     const copy = parseCopyResponse(
-      messageWithText(
+      geminiBody(
         JSON.stringify({
           about: "We keep Knoxville drivers on the road.",
           services: [
@@ -61,29 +58,41 @@ describe("parseCopyResponse", () => {
   });
 
   it("throws on empty or non-JSON responses", () => {
-    expect(() => parseCopyResponse(messageWithText(""))).toThrow();
-    expect(() => parseCopyResponse(messageWithText("not json"))).toThrow();
+    expect(() => parseCopyResponse(geminiBody(""))).toThrow();
+    expect(() => parseCopyResponse(geminiBody("not json"))).toThrow();
   });
 });
 
 describe("generateCopy", () => {
-  it("requires a client or apiKey", async () => {
-    await expect(generateCopy(facts)).rejects.toThrow(/client or opts.apiKey/);
+  it("requires an apiKey", async () => {
+    // @ts-expect-error — intentionally omitting required apiKey
+    await expect(generateCopy(facts, {})).rejects.toThrow(/apiKey/);
   });
 
-  it("calls the model with Opus 4.8 + structured output and returns parsed copy", async () => {
-    const create = vi.fn().mockResolvedValue(
-      messageWithText(JSON.stringify({ about: "Local garage.", services: [{ name: "Tires" }] })),
-    );
-    const client = { messages: { create } } as unknown as Anthropic;
-    const copy = await generateCopy(facts, { client });
+  it("POSTs to Gemini with the guardrail system prompt + structured output", async () => {
+    let calledUrl = "";
+    let sentBody: any;
+    const fetchImpl = (async (url: string, init?: RequestInit) => {
+      calledUrl = url;
+      sentBody = JSON.parse(String(init?.body));
+      return new Response(
+        JSON.stringify(geminiBody(JSON.stringify({ about: "Local garage.", services: [{ name: "Tires" }] }))),
+        { status: 200 },
+      );
+    }) as unknown as typeof fetch;
 
+    const copy = await generateCopy(facts, { apiKey: "k", fetchImpl });
     expect(copy.about).toBe("Local garage.");
-    const params = create.mock.calls[0][0];
-    expect(params.model).toBe(COPY_MODEL);
-    expect(params.output_config.format.type).toBe("json_schema");
-    // Guardrails must be in the system prompt.
-    expect(params.system).toMatch(/Use ONLY the facts provided/);
+    expect(calledUrl).toContain(":generateContent");
+    expect(calledUrl).toContain("key=k");
+    expect(sentBody.generationConfig.responseMimeType).toBe("application/json");
+    // Guardrails must be in the system instruction.
+    expect(sentBody.systemInstruction.parts[0].text).toMatch(/Use ONLY the facts provided/);
+  });
+
+  it("throws on a non-OK Gemini response", async () => {
+    const fetchImpl = (async () => new Response("quota", { status: 429 })) as unknown as typeof fetch;
+    await expect(generateCopy(facts, { apiKey: "k", fetchImpl })).rejects.toThrow(/Gemini 429/);
   });
 });
 

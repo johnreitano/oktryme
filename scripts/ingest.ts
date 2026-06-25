@@ -5,10 +5,11 @@
  *   npm run ingest -- businesses --sample test/fixtures/outscraper.sample.json --no-copy
  *   npm run ingest -- images                # generate the 4 per-trade heroes → R2 cmds
  *
- * Keys come from .dev.vars (gitignored) / the environment: OUTSCRAPER_API_KEY,
- * ANTHROPIC_API_KEY (copy), GEMINI_API_KEY (images). Outputs land in
- * `ingest-output/` and are loaded into Cloudflare with the printed wrangler
- * commands — the script never writes to KV/R2 directly (no bindings in Node).
+ * Keys come from .dev.vars (gitignored) / the environment: OUTSCRAPER_API_KEY
+ * and GEMINI_API_KEY (one Gemini key drives both copy and image generation).
+ * Outputs land in `ingest-output/` and are loaded into Cloudflare with the
+ * printed wrangler commands — the script never writes to KV/R2 directly (no
+ * bindings in Node).
  *
  * "Validate small first" (the chosen Phase-3 sequencing): defaults pull a small
  * sample. Bump --limit / --max for the full ~1,000-business discovery run.
@@ -93,8 +94,8 @@ async function ingestBusinesses(env: Record<string, string>): Promise<void> {
   console.log("\nFunnel:", JSON.stringify(summary));
 
   // 3. Normalize → (copy) → validate. Cap at --max for the small validation run.
-  const apiKey = env.ANTHROPIC_API_KEY;
-  if (!noCopy && !apiKey) throw new Error("ANTHROPIC_API_KEY not set (or pass --no-copy)");
+  const apiKey = env.GEMINI_API_KEY;
+  if (!noCopy && !apiKey) throw new Error("GEMINI_API_KEY not set (or pass --no-copy)");
 
   const taken = new Set<string>();
   const bulk: Array<{ key: string; value: string }> = [];

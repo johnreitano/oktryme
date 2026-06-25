@@ -20,7 +20,7 @@ OPS_FALLBACK_EMAIL=ops@oktryme.com
 
 # --- Phase 3: ingest pipeline (used by `npm run ingest`, not the Worker) ---
 OUTSCRAPER_API_KEY=xxx        # Google Maps scrape (per-record cost) — businesses pull
-ANTHROPIC_API_KEY=sk-ant-xxx  # Claude Opus 4.8 — AI copy generation (§7 #5 guardrails)
-GEMINI_API_KEY=xxx            # Google Nano Banana Pro — per-trade hero image generation
+GEMINI_API_KEY=xxx            # Gemini — drives BOTH AI copy (§7 #5 guardrails) and
+                              # Nano Banana Pro per-trade hero image generation
 
 PREVIEW_HOST=oktryme.com

@@ -8,10 +8,10 @@
 // professional and location-aware.
 //
 // Runs at ingest time (a batch Node script), not in the Worker request path.
-// Uses the official Anthropic SDK with Claude Opus 4.8 + structured outputs so
-// the result is schema-valid JSON we can merge straight into `business.json`.
+// Uses the **Gemini** API (same vendor + key as the Nano Banana Pro image
+// generation) with structured JSON output, so the result is schema-shaped JSON
+// we can merge straight into `business.json`.
 
-import Anthropic from "@anthropic-ai/sdk";
 import type { BusinessRecord, Service } from "../types.js";
 
 /** The verifiable facts handed to the model — nothing else may be asserted. */
@@ -33,8 +33,8 @@ export interface GeneratedCopy {
   services: Service[];
 }
 
-/** Default model — Claude Opus 4.8 (see CLAUDE.md / claude-api skill). */
-export const COPY_MODEL = "claude-opus-4-8";
+/** Default Gemini text model for bulk copy (overridable via opts/env). */
+export const COPY_MODEL = "gemini-2.5-flash";
 
 const SYSTEM_PROMPT = [
   "You write website copy for local service businesses. You are given ONLY a few",
@@ -59,26 +59,29 @@ const SYSTEM_PROMPT = [
   "  generic description of that service.",
 ].join("\n");
 
-/** JSON Schema for structured output — keeps the result schema-valid. */
-const OUTPUT_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
+/**
+ * Gemini structured-output schema (the OpenAPI subset Gemini's `responseSchema`
+ * accepts — uppercase `Type` enum, `propertyOrdering` to fix field order).
+ */
+const RESPONSE_SCHEMA = {
+  type: "OBJECT",
   properties: {
-    about: { type: "string" },
+    about: { type: "STRING" },
     services: {
-      type: "array",
+      type: "ARRAY",
       items: {
-        type: "object",
-        additionalProperties: false,
+        type: "OBJECT",
         properties: {
-          name: { type: "string" },
-          description: { type: "string" },
+          name: { type: "STRING" },
+          description: { type: "STRING" },
         },
         required: ["name", "description"],
+        propertyOrdering: ["name", "description"],
       },
     },
   },
   required: ["about", "services"],
+  propertyOrdering: ["about", "services"],
 } as const;
 
 /** Build the user prompt from the facts (pure — the tested unit). */
@@ -113,47 +116,55 @@ export function factsFromRecord(rec: BusinessRecord, tradeLabel: string): CopyFa
 }
 
 export interface GenerateCopyOptions {
-  /** Provide a configured client, or an apiKey to construct one. */
-  client?: Anthropic;
-  apiKey?: string;
+  apiKey: string;
   model?: string;
+  baseUrl?: string;
+  fetchImpl?: typeof fetch;
 }
 
 /**
- * Generate the About copy + typical services for a business. Throws if neither
- * a client nor an apiKey is supplied (callers gate on key presence).
+ * Generate the About copy + typical services for a business via Gemini. Throws
+ * if no apiKey is supplied (callers gate on key presence).
  */
 export async function generateCopy(
   facts: CopyFacts,
-  opts: GenerateCopyOptions = {},
+  opts: GenerateCopyOptions,
 ): Promise<GeneratedCopy> {
-  const client =
-    opts.client ??
-    (opts.apiKey
-      ? new Anthropic({ apiKey: opts.apiKey })
-      : (() => {
-          throw new Error("generateCopy: provide opts.client or opts.apiKey");
-        })());
+  if (!opts?.apiKey) throw new Error("generateCopy: opts.apiKey (Gemini) is required");
 
-  const response = await client.messages.create({
-    model: opts.model ?? COPY_MODEL,
-    max_tokens: 2000,
-    output_config: {
-      effort: "low", // cheap bulk copy; the task is simple and well-specified
-      format: { type: "json_schema", schema: OUTPUT_SCHEMA },
-    },
-    system: SYSTEM_PROMPT,
-    messages: [{ role: "user", content: buildCopyUserPrompt(facts) }],
-  } as Anthropic.MessageCreateParamsNonStreaming);
+  const model = opts.model ?? COPY_MODEL;
+  const base = opts.baseUrl ?? "https://generativelanguage.googleapis.com";
+  const doFetch = opts.fetchImpl ?? fetch;
+  const url = `${base}/v1beta/models/${model}:generateContent?key=${encodeURIComponent(opts.apiKey)}`;
 
-  return parseCopyResponse(response);
+  const res = await doFetch(url, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM_PROMPT }] },
+      contents: [{ role: "user", parts: [{ text: buildCopyUserPrompt(facts) }] }],
+      generationConfig: {
+        responseMimeType: "application/json",
+        responseSchema: RESPONSE_SCHEMA,
+      },
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Gemini ${res.status}: ${await res.text()}`);
+  }
+  return parseCopyResponse(await res.json());
 }
 
-/** Extract + validate the JSON copy from a Messages response (tested unit). */
-export function parseCopyResponse(response: Anthropic.Message): GeneratedCopy {
-  const text = response.content
-    .filter((b): b is Anthropic.TextBlock => b.type === "text")
-    .map((b) => b.text)
+/** Minimal shape of the Gemini generateContent text response we read. */
+interface GeminiTextResponse {
+  candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+}
+
+/** Extract + validate the JSON copy from a Gemini response (tested unit). */
+export function parseCopyResponse(body: unknown): GeneratedCopy {
+  const res = body as GeminiTextResponse;
+  const text = (res.candidates?.[0]?.content?.parts ?? [])
+    .map((p) => p.text ?? "")
     .join("");
   if (!text.trim()) {
     throw new Error("generateCopy: empty model response");
