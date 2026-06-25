@@ -50,4 +50,43 @@ describe("V4: renderSite", () => {
     expect(html).not.toContain("What Customers Say");
     expect(html).toContain("Get in Touch"); // contact always present
   });
+
+  it("gives form fields accessible labels", () => {
+    const html = renderSite(sampleBusiness(), "preview");
+    expect(html).toContain('for="lead-name"');
+    expect(html).toContain('id="lead-name"');
+    expect(html).toContain("visually-hidden"); // labels present but not shown
+  });
+});
+
+// Phase 2 — trade theming + CSS-placeholder imagery (no drift between modes).
+describe("renderSite: theming + imagery", () => {
+  it("applies the trade theme picked from the category", () => {
+    const html = renderSite(sampleBusiness(), "live"); // "Auto Repair Shop" → auto
+    expect(html).toContain('data-theme="auto"');
+    expect(html).toContain("--accent:#c62828"); // auto palette
+    expect(html).toContain("Request a Quote"); // auto CTA label
+  });
+
+  it("uses a CSS gradient placeholder when no hero image is set", () => {
+    const rec = sampleBusiness();
+    delete rec.images.hero;
+    const html = renderSite(rec, "live");
+    expect(html).toContain("--hero-bg:linear-gradient"); // placeholder in :root
+    expect(html).not.toContain("--hero-bg:url("); // no image override on the hero
+  });
+
+  it("honors an explicit hero image URL", () => {
+    const rec = sampleBusiness();
+    rec.images.hero = "https://cdn.example.com/h.jpg";
+    const html = renderSite(rec, "live");
+    expect(html).toContain("--hero-bg:url('https://cdn.example.com/h.jpg')");
+  });
+
+  it("resolves an R2 key hero through the /img route", () => {
+    const rec = sampleBusiness();
+    rec.images.hero = "auto/hero.png";
+    const html = renderSite(rec, "live");
+    expect(html).toContain("--hero-bg:url('/img/auto/hero.png')");
+  });
 });
