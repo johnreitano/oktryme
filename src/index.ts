@@ -1,5 +1,6 @@
 import { KVStore } from "./store.js";
 import { renderSite } from "./render/renderer.js";
+import { renderLanding } from "./render/landing.js";
 import { serveImage } from "./images/r2.js";
 import { handleLead, LogSender, type LeadEmailSender } from "./lead/form.js";
 import { ResendSender } from "./lead/resend.js";
@@ -221,6 +222,11 @@ export default {
     if (req.method === "GET" && imgMatch) {
       const key = imgMatch[1].split("/").map(decodeURIComponent).join("/");
       return serveImage(env.IMAGES, key);
+    }
+
+    // ---- Brand landing page (preview host root, e.g. oktryme.com/) ----
+    if (req.method === "GET" && isPreviewHost && url.pathname === "/") {
+      return renderLanding();
     }
 
     // ---- Preview render ----

@@ -38,6 +38,23 @@ describe("www → apex redirect (Phase 2)", () => {
   });
 });
 
+describe("brand landing page (preview host root)", () => {
+  it("serves the landing page at the preview host root", async () => {
+    const res = await worker.fetch(new Request("https://oktryme.com/"), makeEnv());
+    expect(res.status).toBe(200);
+    const html = await res.text();
+    expect(html).toContain("Ok, Try Me");
+    expect(html).toContain("High-Performance Business Websites");
+    expect(html).toContain("hello@oktryme.com");
+    expect(html).toContain("Multiply Technologies LLC DBA Ok, Try Me");
+  });
+
+  it("does not serve the landing page at the root of a non-preview host", async () => {
+    const res = await worker.fetch(new Request("https://joesauto.com/"), makeEnv());
+    expect(res.status).not.toBe(200);
+  });
+});
+
 describe("/img R2 route (Phase 2)", () => {
   it("serves an existing image from the IMAGES bucket", async () => {
     const res = await worker.fetch(
