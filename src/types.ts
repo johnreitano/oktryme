@@ -60,6 +60,24 @@ export interface StripeLink {
   subscriptionStatus?: string;
 }
 
+/**
+ * Domain-provisioning outcome for a paid site (§5a C/E). `provisioned` = live on
+ * the custom domain; `fallback` = registration/attach stalled, so we serve on the
+ * `{handle}.<preview-host>` subdomain instead (never auto-refund — the customer is
+ * always served something). `pending` = not yet attempted.
+ */
+export type ProvisioningState = "provisioned" | "fallback" | "pending";
+
+export interface ProvisioningStatus {
+  state: ProvisioningState;
+  /** Last error message when a register/attach attempt failed (fallback state). */
+  lastError?: string;
+  /** How many provisioning attempts have been made (for backoff / dead-lettering). */
+  attempts?: number;
+  /** ISO timestamp of the last provisioning attempt. */
+  updatedAt?: string;
+}
+
 export interface BusinessProfile {
   name: string;
   ownerName?: string;
@@ -87,6 +105,8 @@ export interface BusinessRecord {
   reviews: Review[];
   images: ImageSet;
   stripe?: StripeLink;
+  /** Domain-provisioning outcome once paid (§5a). Absent before conversion. */
+  provisioning?: ProvisioningStatus;
   mailStatus?: string;
   /** ISO timestamp of record creation (stamped by the store on first write). */
   createdAt?: string;
@@ -102,3 +122,9 @@ export const SITE_STATUSES: SiteStatus[] = [
 ];
 
 export const PLANS: Plan[] = ["self_serve", "done_for_you"];
+
+export const PROVISIONING_STATES: ProvisioningState[] = [
+  "provisioned",
+  "fallback",
+  "pending",
+];

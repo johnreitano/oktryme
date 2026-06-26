@@ -49,10 +49,36 @@ export class StubProvisioner implements Provisioner {
   }
 }
 
+export interface ProvisionOptions {
+  /**
+   * Preview host (e.g. "oktryme.com") used to build the `{handle}.<host>`
+   * fallback URL the customer is served on if custom-domain provisioning stalls
+   * (§5a E). Omit and the fallback URL is left undefined.
+   */
+  previewHost?: string;
+  /**
+   * Notified when provisioning falls back to the subdomain so ops can finish the
+   * custom domain manually (§5a E "flag ops"). Failures here are swallowed —
+   * alerting must never break the activation path.
+   */
+  onFallback?: (info: {
+    handle: string;
+    error: string;
+    fallbackUrl?: string;
+  }) => Promise<void>;
+}
+
 /**
  * Provision a paid customer's live site. Idempotent and keyed by `handle`:
- * if the record is already `active` with a domain, it's a no-op (webhook
- * re-delivery is safe — §5a C). Persists the result to the store.
+ * if the record is already `active` and fully `provisioned`, it's a no-op
+ * (webhook re-delivery is safe — §5a C).
+ *
+ * Failure handling (§5a E): if registration or attach fails, the subscription
+ * is still flipped `active` and the site is served on the `{handle}.<host>`
+ * fallback subdomain — a paying customer is never left with nothing and we never
+ * auto-refund. The failure is recorded on `provisioning` (state `fallback` +
+ * error + attempt count) and ops is alerted; re-delivery retries the custom
+ * domain. Persists the result to the store.
  */
 export async function provisionForActivation(
   handle: string,
@@ -60,24 +86,52 @@ export async function provisionForActivation(
   backups: string[],
   store: Store,
   provisioner: Provisioner,
+  opts: ProvisionOptions = {},
 ): Promise<BusinessRecord> {
   const rec = await store.get(handle);
   if (!rec) throw new ProvisionError(`No record for handle: ${handle}`);
 
-  // Idempotency: already provisioned → return as-is.
-  if (rec.status === "active" && rec.domain) return rec;
+  // Idempotency: custom domain already live → no-op (don't re-register).
+  if (rec.status === "active" && rec.domain && rec.provisioning?.state === "provisioned") {
+    return rec;
+  }
 
-  const { domain } = await provisioner.registerDomain(
-    handle,
-    preferredDomain,
-    backups,
-  );
-  await provisioner.attachCustomDomain(domain);
+  const attempts = (rec.provisioning?.attempts ?? 0) + 1;
+  const now = new Date().toISOString();
 
-  rec.domain = domain;
-  rec.status = "active";
-  rec.updatedAt = new Date().toISOString();
-  await store.put(rec);
-  await store.mapDomain(domain, handle);
-  return rec;
+  try {
+    const { domain } = await provisioner.registerDomain(
+      handle,
+      preferredDomain,
+      backups,
+    );
+    await provisioner.attachCustomDomain(domain);
+
+    rec.domain = domain;
+    rec.status = "active";
+    rec.provisioning = { state: "provisioned", attempts, updatedAt: now };
+    rec.updatedAt = now;
+    await store.put(rec);
+    await store.mapDomain(domain, handle);
+    return rec;
+  } catch (err) {
+    // §5a E — payment succeeded; deliver on the fallback subdomain, flag ops.
+    const error = err instanceof Error ? err.message : String(err);
+    rec.status = "active";
+    rec.provisioning = { state: "fallback", lastError: error, attempts, updatedAt: now };
+    rec.updatedAt = now;
+    await store.put(rec);
+
+    const fallbackUrl = opts.previewHost
+      ? `https://${handle}.${opts.previewHost}`
+      : undefined;
+    if (opts.onFallback) {
+      try {
+        await opts.onFallback({ handle, error, fallbackUrl });
+      } catch {
+        // Alerting is best-effort — never let it break activation.
+      }
+    }
+    return rec;
+  }
 }

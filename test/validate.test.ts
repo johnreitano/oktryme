@@ -75,6 +75,18 @@ describe("validateBusinessRecord", () => {
     }
   });
 
+  it("treats provisioning as optional but validates it when present", () => {
+    const rec = sampleBusiness();
+    (rec as { provisioning?: unknown }).provisioning = { state: "provisioned", attempts: 1 };
+    expect(validateBusinessRecord(rec).ok).toBe(true);
+    (rec as { provisioning?: unknown }).provisioning = { state: "bogus" };
+    const result = validateBusinessRecord(rec);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.issues.some((i) => i.includes("state"))).toBe(true);
+    }
+  });
+
   it("assertBusinessRecord throws ValidationError on bad input", () => {
     expect(() => assertBusinessRecord({})).toThrow(ValidationError);
     try {

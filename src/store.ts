@@ -10,10 +10,14 @@ export interface Store {
   put(rec: BusinessRecord): Promise<void>;
   resolveDomain(domain: string): Promise<string | null>;
   mapDomain(domain: string, handle: string): Promise<void>;
+  /** Resolve a Stripe customer id back to a handle (dunning/cancel webhooks). */
+  resolveCustomer(customerId: string): Promise<string | null>;
+  mapCustomer(customerId: string, handle: string): Promise<void>;
 }
 
 const REC_PREFIX = "biz:";
 const DOMAIN_PREFIX = "domain:";
+const CUSTOMER_PREFIX = "customer:";
 
 /** Cloudflare KV-backed store (production). */
 export class KVStore implements Store {
@@ -37,6 +41,9 @@ export class KVStore implements Store {
     if (!rec.createdAt) rec.createdAt = new Date().toISOString();
     await this.kv.put(REC_PREFIX + rec.handle, JSON.stringify(rec));
     if (rec.domain) await this.mapDomain(rec.domain, rec.handle);
+    // Keep the customer index fresh so dunning/cancel events resolve the handle
+    // even when the Stripe event object carries no `handle` metadata (§5a).
+    if (rec.stripe?.customerId) await this.mapCustomer(rec.stripe.customerId, rec.handle);
   }
 
   async resolveDomain(domain: string): Promise<string | null> {
@@ -46,12 +53,21 @@ export class KVStore implements Store {
   async mapDomain(domain: string, handle: string): Promise<void> {
     await this.kv.put(DOMAIN_PREFIX + domain.toLowerCase(), handle);
   }
+
+  async resolveCustomer(customerId: string): Promise<string | null> {
+    return this.kv.get(CUSTOMER_PREFIX + customerId);
+  }
+
+  async mapCustomer(customerId: string, handle: string): Promise<void> {
+    await this.kv.put(CUSTOMER_PREFIX + customerId, handle);
+  }
 }
 
 /** In-memory store for tests and local spikes. */
 export class MemoryStore implements Store {
   private recs = new Map<string, BusinessRecord>();
   private domains = new Map<string, string>();
+  private customers = new Map<string, string>();
 
   async get(handle: string): Promise<BusinessRecord | null> {
     const rec = this.recs.get(handle);
@@ -61,6 +77,7 @@ export class MemoryStore implements Store {
   async put(rec: BusinessRecord): Promise<void> {
     this.recs.set(rec.handle, structuredClone(rec));
     if (rec.domain) await this.mapDomain(rec.domain, rec.handle);
+    if (rec.stripe?.customerId) await this.mapCustomer(rec.stripe.customerId, rec.handle);
   }
 
   async resolveDomain(domain: string): Promise<string | null> {
@@ -69,5 +86,13 @@ export class MemoryStore implements Store {
 
   async mapDomain(domain: string, handle: string): Promise<void> {
     this.domains.set(domain.toLowerCase(), handle);
+  }
+
+  async resolveCustomer(customerId: string): Promise<string | null> {
+    return this.customers.get(customerId) ?? null;
+  }
+
+  async mapCustomer(customerId: string, handle: string): Promise<void> {
+    this.customers.set(customerId, handle);
   }
 }

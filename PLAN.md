@@ -442,7 +442,7 @@ Cheap end-to-end proofs before pipeline build:
 | **1 — Data layer** | 0.5–1 | ✅ **Complete** — KV-canonical `business.json` + runtime validation + `domain→handle` map + `createdAt`; R2 bucket `maps-website-builder-images` created & bound (front-loaded, also unblocks Phases 2–3) |
 | **2 — Site Worker + templates** | 1.5–2.5 | ✅ **Complete (2026-06-24)** — 3 trade variants (auto / HVAC / landscaping) + universal fallback, CSS-placeholder imagery, R2 serve pipeline (`/img/{key}`), accessible form labels, `www→apex` 301 redirect. **AI imagery generation deferred to Phase 3** (incl. crafting the specialized per-trade prompt) via **Google Nano Banana Pro** (Gemini API) — placeholders ship now, R2 ready to receive assets |
 | **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails. **Also: per-trade image generation** (Nano Banana Pro / Gemini API) replacing the Phase-2 CSS placeholders — including **crafting the specialized per-trade image prompt** |
-| **4 — Billing + provisioning** | 1.5–2 | Stripe (V3) + provisioning (V1) largely written; cost is portal, Stripe Tax, hardening, V1 live |
+| **4 — Billing + provisioning** | 1.5–2 | ✅ **Complete (2026-06-25, test-mode)** — Checkout tiers + portal, Stripe Tax, webhook hardening, provisioning fallback, DFY intake. Live activation = operational follow-on |
 | **5 — Postcard outreach** | 1–1.5 (dev) | + Phase 5a validation test = operational/calendar time, not dev-days |
 | **6 — AI chat editor** | 2.5–4 | largest: net-new **auth + first frontend** + agent loop (edit core exists from V4) |
 
@@ -482,12 +482,12 @@ Cheap end-to-end proofs before pipeline build:
   - [x] **Craft the specialized per-trade image prompt** via the 3-step realism workflow in [`image-prompting-process.md`](./image-prompting-process.md) (generate → critique/improve → compress/de-gloss) — `src/images/prompts.ts`: documentary-realistic hero prompts per theme (auto/hvac/landscaping/universal) + shared avoid list (no text/logos/faces for clean overlay).
   - [x] Batch-generate per-trade images with **Nano Banana Pro** → R2 — `src/images/generate.ts`: **all 4 heroes generated live (`gemini-3-pro-image`), loaded to local R2, and confirmed rendering in a preview.** Production-R2 upload is the remaining operational step.
 
-- [ ] **Phase 4 — Billing + provisioning (§5a).** Stripe → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live. **Includes V1-live** (§8) — the first paid Registrar registration, deferred out of Phase 0 so the spikes stay no-cost.
-  - [ ] Stripe Checkout + customer portal ($49 + $99 tiers, $49→$99 upgrade)
-  - [ ] Stripe Tax (US SaaS sales tax from day one)
-  - [ ] Webhook handler hardening — activate / dunning / cancel
-  - [ ] Provisioning job — register → attach custom domain → auto DNS+SSL, idempotent + `{handle}.oktryme.com` subdomain fallback on failure
-  - [ ] Done-for-you intake (bridge until the editor ships)
+- [x] **Phase 4 — Billing + provisioning (§5a).** ✅ **Code shipped & test-mode-verified (2026-06-25).** Stripe → status flip → register domain → Workers Custom Domain (auto DNS+SSL) → live, with a never-refund fallback. 135 tests green; `wrangler deploy --dry-run` clean. **V1-live** (the first paid Registrar registration) was already verified in Phase 0 (§8). _Operational follow-ons (not dev), gated on going live: activate live-mode Stripe, save the Customer Portal config + add tax registrations in the dashboard (WY is SaaS-exempt + no economic nexus elsewhere this year, so none are warranted yet — Stripe Tax monitors thresholds), and run one real live Stripe→provision→domain end-to-end._
+  - [x] Stripe Checkout ($49 default, `?plan=done_for_you` → $99) + customer portal (`/portal/{handle}` → Billing Portal: $49→$99 upgrade, card update, self-cancel) — `src/billing/stripe.ts`, `src/index.ts`
+  - [x] Stripe Tax — `automatic_tax[enabled]=true` + required billing address on Checkout (collects only where a registration exists, so safe on from day one, §5a A)
+  - [x] Webhook handler hardening — `customer→handle` index (dunning/cancel/invoice events resolve without metadata); `customer.subscription.updated` (plan/status sync, drives the $49→$99 upgrade); `invoice.payment_succeeded` reactivation (past_due→active); plan mapped from session metadata / price
+  - [x] Provisioning job — register → attach custom domain → auto DNS+SSL, idempotent; on failure keeps the sub `active`, serves `{handle}.oktryme.com` (Worker fallback-subdomain route), records `provisioning.state=fallback` + alerts ops, retries on re-delivery — never auto-refunds (§5a E). `src/provisioning/provision.ts`, `src/notify/ops.ts`
+  - [x] Done-for-you intake (`POST /dfy/{handle}` → ops email) — bridge until the Phase-6 editor; `src/dfy/intake.ts`
 
 - [ ] **Phase 5 — Postcard outreach (§1C).** PostGrid/Lob templates + batch-send + QR/tracking + attribution.
   - [ ] Postcard front/back templates (merge vars + QR)

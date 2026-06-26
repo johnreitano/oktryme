@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { ResendSender, ResendError } from "../src/lead/resend.js";
-import { createCheckoutSession } from "../src/billing/stripe.js";
+import { createCheckoutSession, createPortalSession } from "../src/billing/stripe.js";
 import type { LeadEmailArgs } from "../src/lead/form.js";
 
 const LEAD: LeadEmailArgs = {
@@ -77,6 +77,7 @@ describe("V3: createCheckoutSession", () => {
       {
         handle: "joes-auto",
         priceId: "price_49",
+        plan: "self_serve",
         successUrl: "https://oktryme.com/p/joes-auto?welcome=1",
         cancelUrl: "https://oktryme.com/p/joes-auto",
         customerEmail: "joe@joesauto.com",
@@ -93,14 +94,65 @@ describe("V3: createCheckoutSession", () => {
     expect(captured.body.get("customer_email")).toBe("joe@joesauto.com");
   });
 
+  it("stamps the plan and enables Stripe Tax (§5a A)", async () => {
+    let body: URLSearchParams | undefined;
+    const fetchImpl = async (_u: string, init?: RequestInit) => {
+      body = new URLSearchParams(init!.body as string);
+      return new Response(JSON.stringify({ url: "https://checkout.stripe.com/c/pay/x" }), { status: 200 });
+    };
+    await createCheckoutSession(
+      {
+        handle: "joes-auto",
+        priceId: "price_99",
+        plan: "done_for_you",
+        successUrl: "https://x",
+        cancelUrl: "https://x",
+      },
+      "sk_test_x",
+      fetchImpl,
+    );
+    expect(body!.get("metadata[plan]")).toBe("done_for_you");
+    expect(body!.get("subscription_data[metadata][plan]")).toBe("done_for_you");
+    expect(body!.get("subscription_data[metadata][handle]")).toBe("joes-auto");
+    expect(body!.get("automatic_tax[enabled]")).toBe("true");
+    expect(body!.get("billing_address_collection")).toBe("required");
+  });
+
   it("throws when Stripe returns an error", async () => {
     const fetchImpl = async () => new Response(JSON.stringify({ error: { message: "bad" } }), { status: 400 });
     await expect(
       createCheckoutSession(
-        { handle: "h", priceId: "p", successUrl: "https://x", cancelUrl: "https://x" },
+        { handle: "h", priceId: "p", plan: "self_serve", successUrl: "https://x", cancelUrl: "https://x" },
         "sk_test_x",
         fetchImpl,
       ),
+    ).rejects.toThrow(/failed/);
+  });
+});
+
+describe("Phase 4: createPortalSession", () => {
+  it("creates a billing-portal session for the customer and returns the URL", async () => {
+    let captured: any;
+    const fetchImpl = async (url: string, init?: RequestInit) => {
+      captured = { url, body: new URLSearchParams(init!.body as string) };
+      return new Response(JSON.stringify({ url: "https://billing.stripe.com/p/session_x" }), { status: 200 });
+    };
+    const { url } = await createPortalSession(
+      "cus_123",
+      "https://oktryme.com/p/joes-auto",
+      "sk_test_x",
+      fetchImpl,
+    );
+    expect(url).toContain("billing.stripe.com");
+    expect(captured.url).toBe("https://api.stripe.com/v1/billing_portal/sessions");
+    expect(captured.body.get("customer")).toBe("cus_123");
+    expect(captured.body.get("return_url")).toBe("https://oktryme.com/p/joes-auto");
+  });
+
+  it("throws when the portal session can't be created", async () => {
+    const fetchImpl = async () => new Response(JSON.stringify({ error: { message: "no config" } }), { status: 400 });
+    await expect(
+      createPortalSession("cus_123", "https://x", "sk_test_x", fetchImpl),
     ).rejects.toThrow(/failed/);
   });
 });
