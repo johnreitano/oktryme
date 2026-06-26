@@ -34,11 +34,12 @@ You may spend money on my behalf **within a running budget** instead of asking b
 
 | Allowed | Spent | Remaining |
 |---|---|---|
-| $100.00 | $10.00 | $90.00 |
+| $100.00 | $20.46 | $79.54 |
 
 | Date | Item | Amount | Running total |
 |---|---|---|---|
 | 2026-06-25 | Outscraper API credits (prepaid top-up; activates API + funds the §7 #8 validation pull) | $10.00 | $10.00 |
+| 2026-06-26 | `pickle-tech.com` domain registration (Cloudflare Registrar, old account; **auto-renews ~$10.46/yr**) — moved `prod/staging.pickle.*` off `oktryme.com` during the §5b zone cleanup | $10.46 | $20.46 |
 
 > Known recurring cost *outside* this budget: `assessmybusiness.app` (V1-live, §8) auto-renews ~$14.20/yr — disable in the Cloudflare dashboard if not keeping it. Fold it into the ledger only if/when it renews.
 
