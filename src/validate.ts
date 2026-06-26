@@ -7,9 +7,11 @@
 
 import {
   PLANS,
+  PROVISIONING_STATES,
   SITE_STATUSES,
   type BusinessRecord,
   type Plan,
+  type ProvisioningState,
   type SiteStatus,
 } from "./types.js";
 
@@ -61,6 +63,7 @@ function check(input: unknown, issues: string[]): void {
   checkArray(rec.reviews, "reviews", issues, checkReview);
   checkImages(rec.images, issues);
   checkStripe(rec.stripe, issues);
+  checkProvisioning(rec.provisioning, issues);
 }
 
 function checkProfile(input: unknown, issues: string[]): void {
@@ -158,6 +161,21 @@ function checkStripe(input: unknown, issues: string[]): void {
   optString(s, "customerId", issues, "stripe.customerId");
   optString(s, "subscriptionId", issues, "stripe.subscriptionId");
   optString(s, "subscriptionStatus", issues, "stripe.subscriptionStatus");
+}
+
+function checkProvisioning(input: unknown, issues: string[]): void {
+  if (input === undefined) return; // optional (absent before conversion)
+  if (!isObject(input)) {
+    issues.push("provisioning must be an object");
+    return;
+  }
+  const p = input as Record<string, unknown>;
+  reqEnum(p, "state", PROVISIONING_STATES as readonly ProvisioningState[], issues);
+  optString(p, "lastError", issues, "provisioning.lastError");
+  optString(p, "updatedAt", issues, "provisioning.updatedAt");
+  if (p.attempts !== undefined && typeof p.attempts !== "number") {
+    issues.push("provisioning.attempts must be a number");
+  }
 }
 
 // --- primitives --------------------------------------------------------------

@@ -1,5 +1,7 @@
-# Cloudflare Worker config — Phase 0 spikes (V3/V4).
-# The single Worker renders preview + live, serves forms/QR, and handles Stripe webhooks.
+# Cloudflare Worker config.
+# The single Worker renders preview + live (incl. the {handle}.<preview-host>
+# fallback subdomain), serves forms/QR, the convert→Checkout + customer-portal +
+# done-for-you routes, and handles Stripe webhooks (Phase 4).
 name = "maps-website-builder"
 main = "src/index.ts"
 compatibility_date = "2024-09-01"

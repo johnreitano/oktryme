@@ -7,10 +7,18 @@ import {
   verifyStripeSignature,
   handleStripeEvent,
   createCheckoutSession,
+  createPortalSession,
   type PriceMap,
 } from "./billing/stripe.js";
 import { StubProvisioner, type Provisioner } from "./provisioning/provision.js";
 import { CloudflareProvisioner } from "./provisioning/cloudflare.js";
+import {
+  LogOpsNotifier,
+  ResendOpsNotifier,
+  type OpsNotifier,
+} from "./notify/ops.js";
+import { handleDfyRequest } from "./dfy/intake.js";
+import type { Plan } from "./types.js";
 
 export interface Env {
   BUSINESS_KV: KVNamespace;
@@ -62,6 +70,18 @@ function buildSender(env: Env): LeadEmailSender {
   return new LogSender();
 }
 
+/** Ops notifier (provisioning alerts + DFY intake) — Resend when configured. */
+function buildOps(env: Env): OpsNotifier {
+  if (env.RESEND_API_KEY && env.LEADS_FROM && env.OPS_FALLBACK_EMAIL) {
+    return new ResendOpsNotifier({
+      apiKey: env.RESEND_API_KEY,
+      from: env.LEADS_FROM,
+      to: env.OPS_FALLBACK_EMAIL,
+    });
+  }
+  return new LogOpsNotifier();
+}
+
 /**
  * The single Worker (§3 of PLAN.md): renders preview (by path) and live (by
  * custom domain) from one data source, serves the contact form + QR routes +
@@ -98,16 +118,24 @@ export default {
         selfServe: env.PRICE_SELF_SERVE ?? "",
         doneForYou: env.PRICE_DONE_FOR_YOU ?? "",
       };
+      const ops = buildOps(env);
       const result = await handleStripeEvent(JSON.parse(body), {
         store,
         provisioner: buildProvisioner(env),
         prices,
         previewHost: env.PREVIEW_HOST,
+        onProvisionFallback: async ({ handle, error, fallbackUrl }) => {
+          await ops.notify({
+            subject: `⚠️ Provisioning fell back to subdomain — ${handle}`,
+            html: `<p>Custom-domain provisioning failed for <strong>${handle}</strong>; the customer is live on <a href="${fallbackUrl ?? ""}">${fallbackUrl ?? "the fallback subdomain"}</a>. Finish the custom domain manually (§5a E).</p><p>Error: ${error}</p>`,
+          });
+        },
       });
       return Response.json(result);
     }
 
     // ---- Convert: preview CTA → Stripe Checkout ----
+    // `?plan=done_for_you` selects the $99 tier; default is $49 self-serve (§5a A).
     const convertMatch = url.pathname.match(/^\/convert\/([^/]+)$/);
     if (req.method === "GET" && convertMatch) {
       const handle = convertMatch[1];
@@ -116,11 +144,16 @@ export default {
       if (!env.STRIPE_SECRET_KEY || !env.PRICE_SELF_SERVE) {
         return new Response("Checkout not configured", { status: 503 });
       }
+      const wantsDfy =
+        url.searchParams.get("plan") === "done_for_you" && !!env.PRICE_DONE_FOR_YOU;
+      const plan: Plan = wantsDfy ? "done_for_you" : "self_serve";
+      const priceId = wantsDfy ? env.PRICE_DONE_FOR_YOU! : env.PRICE_SELF_SERVE;
       const previewUrl = `https://${env.PREVIEW_HOST}/p/${handle}`;
       const { url: checkoutUrl } = await createCheckoutSession(
         {
           handle,
-          priceId: env.PRICE_SELF_SERVE,
+          priceId,
+          plan,
           successUrl: `${previewUrl}?welcome=1`,
           cancelUrl: previewUrl,
           customerEmail: rec.business.email,
@@ -128,6 +161,37 @@ export default {
         env.STRIPE_SECRET_KEY,
       );
       return Response.redirect(checkoutUrl, 303);
+    }
+
+    // ---- Customer portal: manage subscription ($49→$99 upgrade, cancel) ----
+    const portalMatch = url.pathname.match(/^\/portal\/([^/]+)$/);
+    if (req.method === "GET" && portalMatch) {
+      const handle = portalMatch[1];
+      const rec = await store.get(handle);
+      if (!rec?.stripe?.customerId) return new Response("Not found", { status: 404 });
+      if (!env.STRIPE_SECRET_KEY) {
+        return new Response("Portal not configured", { status: 503 });
+      }
+      const { url: portalUrl } = await createPortalSession(
+        rec.stripe.customerId,
+        `https://${env.PREVIEW_HOST}/p/${handle}`,
+        env.STRIPE_SECRET_KEY,
+      );
+      return Response.redirect(portalUrl, 303);
+    }
+
+    // ---- Done-for-you intake (bridge until the Phase-6 editor) ----
+    const dfyMatch = url.pathname.match(/^\/dfy\/([^/]+)$/);
+    if (req.method === "POST" && dfyMatch) {
+      const res = await handleDfyRequest(
+        dfyMatch[1],
+        await req.formData(),
+        store,
+        buildOps(env),
+      );
+      return res.ok
+        ? new Response("Got it — we'll make that change.", { status: 200 })
+        : new Response(res.error, { status: 400 });
     }
 
     // ---- Contact form ----
@@ -169,9 +233,16 @@ export default {
       });
     }
 
-    // ---- Live render (by custom domain) ----
+    // ---- Live render (by custom domain, or {handle}.<preview-host> fallback) ----
+    // The fallback subdomain (§5a D/E) keeps a paid site reachable while its
+    // custom domain registers/issues TLS — or indefinitely if provisioning
+    // dead-letters to manual. Resolve the handle from the subdomain first, else
+    // from the custom-domain map.
     if (req.method === "GET" && !isPreviewHost) {
-      const handle = await store.resolveDomain(host);
+      const fallbackSuffix = `.${env.PREVIEW_HOST}`;
+      const handle = host.endsWith(fallbackSuffix)
+        ? host.slice(0, -fallbackSuffix.length)
+        : await store.resolveDomain(host);
       if (handle) {
         const rec = await store.get(handle);
         if (rec && rec.status === "active") {

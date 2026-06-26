@@ -1,10 +1,14 @@
 # Copy to .dev.vars (gitignored) for `wrangler dev`.
 
-# --- V3: Stripe (test mode) ---
+# --- V3 / Phase 4: Stripe (test mode) ---
 STRIPE_SECRET_KEY=sk_test_xxx
 STRIPE_WEBHOOK_SECRET=whsec_xxx
-PRICE_SELF_SERVE=price_xxx_49
-PRICE_DONE_FOR_YOU=price_xxx_99
+PRICE_SELF_SERVE=price_xxx_49     # $49 self-serve (default Checkout tier)
+PRICE_DONE_FOR_YOU=price_xxx_99   # $99 done-for-you (/convert?plan=done_for_you + portal upgrade)
+# Checkout enables Stripe Tax (automatic_tax) — it collects only where a tax
+# registration exists in the dashboard, so it's safe on from day one (§5a A).
+# The customer portal (/portal/{handle}) needs its config saved once in the
+# Stripe dashboard (Billing → Customer portal) for the $49→$99 upgrade + cancel.
 
 # --- V1: Cloudflare provisioning (when set, real provisioning replaces the stub) ---
 CF_ACCOUNT_ID=xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
@@ -16,6 +20,8 @@ CF_WORKER_SERVICE=maps-website-builder
 RESEND_API_KEY=re_xxx
 # Quote values with spaces / `<>` so the file is also shell-sourceable (wrangler strips the quotes).
 LEADS_FROM="OK Try Me <leads@oktryme.com>"
+# Ops inbox: leads with no business email, plus Phase-4 ops alerts —
+# provisioning-fallback warnings (§5a E) and done-for-you change requests (§6).
 OPS_FALLBACK_EMAIL=ops@oktryme.com
 
 # --- Phase 3: ingest pipeline (used by `npm run ingest`, not the Worker) ---

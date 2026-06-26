@@ -158,6 +158,117 @@ describe("V3: plan mapping + dunning transitions", () => {
   });
 });
 
+describe("Phase 4: webhook hardening", () => {
+  it("resolves the handle from the customer index when no metadata is present", async () => {
+    const { store, provisioner } = await setup();
+    const deps = { store, provisioner, prices: PRICES, previewHost: "oktryme.com" };
+    // Activation indexes customer cus_123 → joes-auto.
+    await handleStripeEvent(checkoutEvent(), deps);
+
+    // A bare invoice.payment_failed (no metadata.handle) still resolves + lapses.
+    const res = await handleStripeEvent(
+      { id: "evt_x", type: "invoice.payment_failed", data: { object: { customer: "cus_123" } } },
+      deps,
+    );
+    expect(res).toMatchObject({ handled: true, action: "past_due", handle: "joes-auto" });
+    expect((await store.get("joes-auto"))?.status).toBe("past_due");
+  });
+
+  it("subscription.updated upgrades the plan ($49 → $99) and syncs status", async () => {
+    const { store, provisioner } = await setup();
+    const deps = { store, provisioner, prices: PRICES, previewHost: "oktryme.com" };
+    await handleStripeEvent(checkoutEvent(), deps);
+    expect((await store.get("joes-auto"))?.plan).toBe("self_serve");
+
+    const res = await handleStripeEvent(
+      {
+        id: "evt_up",
+        type: "customer.subscription.updated",
+        data: {
+          object: {
+            id: "sub_123",
+            customer: "cus_123",
+            status: "active",
+            metadata: { handle: "joes-auto" },
+            items: { data: [{ price: { id: "price_99" } }] },
+          },
+        },
+      },
+      deps,
+    );
+    expect(res).toMatchObject({ handled: true, action: "updated" });
+    const rec = await store.get("joes-auto");
+    expect(rec?.plan).toBe("done_for_you");
+    expect(rec?.status).toBe("active");
+  });
+
+  it("invoice.payment_succeeded reactivates a past_due site", async () => {
+    const { store, provisioner } = await setup();
+    const deps = { store, provisioner, prices: PRICES, previewHost: "oktryme.com" };
+    await handleStripeEvent(checkoutEvent(), deps);
+    await handleStripeEvent(
+      { id: "evt_pf", type: "invoice.payment_failed", data: { object: { customer: "cus_123" } } },
+      deps,
+    );
+    expect((await store.get("joes-auto"))?.status).toBe("past_due");
+
+    const res = await handleStripeEvent(
+      { id: "evt_ps", type: "invoice.payment_succeeded", data: { object: { customer: "cus_123" } } },
+      deps,
+    );
+    expect(res).toMatchObject({ handled: true, action: "reactivated" });
+    expect((await store.get("joes-auto"))?.status).toBe("active");
+  });
+
+  it("does not reactivate an already-active site on payment_succeeded", async () => {
+    const { store, provisioner } = await setup();
+    const deps = { store, provisioner, prices: PRICES, previewHost: "oktryme.com" };
+    await handleStripeEvent(checkoutEvent(), deps);
+    const res = await handleStripeEvent(
+      { id: "evt_ps", type: "invoice.payment_succeeded", data: { object: { customer: "cus_123" } } },
+      deps,
+    );
+    expect(res.handled).toBe(false);
+  });
+
+  it("maps the plan from session metadata at checkout", async () => {
+    const { store, provisioner } = await setup();
+    await handleStripeEvent(
+      checkoutEvent({ metadata: { handle: "joes-auto", domain: "joesauto.com", plan: "done_for_you" } }),
+      { store, provisioner, prices: PRICES, previewHost: "oktryme.com" },
+    );
+    expect((await store.get("joes-auto"))?.plan).toBe("done_for_you");
+  });
+});
+
+describe("Phase 4: provisioning fallback (§5a E)", () => {
+  it("keeps the subscription active on a fallback subdomain when registration fails, and alerts ops", async () => {
+    const store = new MemoryStore();
+    await store.put(sampleBusiness());
+    // All candidate domains taken → registration throws inside provisioning.
+    const provisioner = new StubProvisioner(
+      new Set(["joesauto.com", "joesauto.net", "joesauto.co", "getjoesauto.com"]),
+    );
+    const fallbacks: any[] = [];
+    const res = await handleStripeEvent(checkoutEvent(), {
+      store,
+      provisioner,
+      prices: PRICES,
+      previewHost: "oktryme.com",
+      onProvisionFallback: async (info) => { fallbacks.push(info); },
+    });
+
+    expect(res).toMatchObject({ handled: true, action: "activated", handle: "joes-auto" });
+    const rec = await store.get("joes-auto");
+    expect(rec?.status).toBe("active"); // paid customer is served, not refunded
+    expect(rec?.domain).toBeUndefined(); // no custom domain yet
+    expect(rec?.provisioning?.state).toBe("fallback");
+    expect(rec?.provisioning?.lastError).toBeTruthy();
+    expect(fallbacks).toHaveLength(1);
+    expect(fallbacks[0].fallbackUrl).toBe("https://joes-auto.oktryme.com");
+  });
+});
+
 describe("V3: backup domain generation", () => {
   it("derives ranked fallbacks from the desired name", () => {
     expect(backupDomains("joesauto.com", "joes-auto")).toEqual({
