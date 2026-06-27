@@ -32,6 +32,21 @@ OPS_FALLBACK_EMAIL=ops@oktryme.com
 # forward /admin. Set in prod with: wrangler secret put ADMIN_TOKEN
 ADMIN_TOKEN=choose-a-long-random-string
 
+# --- Phase 5: postcard outreach (§1C) ---
+# Worker secret: guards POST /postgrid/webhook (set `x-webhook-secret` on the
+# PostGrid webhook to this value). Set in prod via `wrangler secret put`.
+POSTGRID_WEBHOOK_SECRET=some_random_string
+# Used by `npm run postcards` (the batch-send script), NOT the Worker:
+POSTGRID_API_KEY=test_sk_xxx      # PostGrid test-mode key (sandbox = $0); live key only for real mail
+# Return/sender address printed on every card — §5a requires NON-RESIDENTIAL
+# (LLC registered-agent / virtual mailbox / PO box). Placeholders block --live.
+POSTGRID_FROM_COMPANY="Multiply Technologies LLC"
+POSTGRID_FROM_LINE1=REPLACE_ME
+POSTGRID_FROM_LINE2=
+POSTGRID_FROM_CITY=REPLACE_ME
+POSTGRID_FROM_STATE=REPLACE_ME
+POSTGRID_FROM_ZIP=REPLACE_ME
+
 # --- Phase 3: ingest pipeline (used by `npm run ingest`, not the Worker) ---
 OUTSCRAPER_API_KEY=xxx        # Google Maps scrape (per-record cost) — businesses pull
 GEMINI_API_KEY=xxx            # Gemini — drives BOTH AI copy (§7 #5 guardrails) and

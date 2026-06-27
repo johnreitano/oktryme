@@ -1,8 +1,8 @@
 // Sales-funnel pipeline transitions (Phase 6 Track A / §6 CRM).
 //
 // A per-business `pipeline.status` tracks the lead through the sales funnel —
-// distinct from the site-lifecycle `status` and from `mailStatus`. Transitions
-// are driven by the existing mail/scan/Stripe signals and must be:
+// distinct from the site-lifecycle `status` and from the postcard `mail` state.
+// Transitions are driven by the existing mail/scan/Stripe signals and must be:
 //   • idempotent  — re-delivering the same signal is a no-op;
 //   • monotonic   — re-delivery of an *earlier* signal never regresses a lead
 //                   that has already advanced (a stray `delivered` webhook after
@@ -11,6 +11,7 @@
 
 import type {
   BusinessRecord,
+  MailStatus,
   PipelineEvent,
   PipelineStatus,
 } from "../types.js";
@@ -29,22 +30,12 @@ const PIPELINE_RANK: Record<PipelineStatus, number> = {
   canceled: 4,
 };
 
-/** Mail provider lifecycle statuses that mean "the postcard is on its way or
- * arrived" → advance to `postcard-sent`. Failure/return statuses are excluded
- * (they neither advance nor regress). Covers the Lob/PostGrid vocabulary so the
- * Phase-5 delivery webhook can feed raw provider statuses straight through. */
-const POSTCARD_SENT_MAIL_STATUSES = new Set([
-  "created",
-  "rendered_pdf",
-  "mailed",
-  "in_transit",
-  "in_local_area",
-  "processed_for_delivery",
-  "delivered",
-  "sent",
-  "printing",
-  "processed",
-]);
+/** Typed MailStatus values that mean "the postcard is on its way or arrived" →
+ * advance the funnel to `postcard-sent`. `queued` (not yet sent) and the
+ * terminal failure states (`returned`/`failed`) are excluded — they neither
+ * advance nor regress. The provider→MailStatus mapping (Phase 5
+ * `mapPostgridStatus`) collapses the raw Lob/PostGrid vocabulary into these. */
+const POSTCARD_SENT_MAIL = new Set<MailStatus>(["mailed", "in_transit", "delivered"]);
 
 /** Current funnel stage, treating an untouched record as `new`. */
 export function pipelineStatusOf(rec: BusinessRecord): PipelineStatus {
@@ -114,20 +105,32 @@ export function setPipelineManual(
 }
 
 /**
- * Apply a mail-provider status to the record: store it on `mailStatus` and, when
- * it indicates the postcard was sent/in-transit/delivered, advance the funnel to
- * `postcard-sent` (§6 "postcard send / mail_status=delivered → postcard-sent").
- * Returns `true` if the funnel stage changed. Mutates `rec` in place.
+ * Apply a (typed) mail status to the record: fold it onto the `mail` object and,
+ * when it indicates the postcard was sent/in-transit/delivered, advance the funnel
+ * to `postcard-sent` (§6 "postcard send / mail delivered → postcard-sent"). The
+ * single entry point for mail updates — used by both the PostGrid webhook and the
+ * /admin/mail ops route, so mail state and funnel stage never drift. Returns
+ * `true` if the funnel stage changed. Mutates `rec` in place.
  */
 export function applyMailStatus(
   rec: BusinessRecord,
-  mailStatus: string,
-  opts: TransitionOptions = {},
+  status: MailStatus,
+  opts: TransitionOptions & { provider?: string; providerId?: string } = {},
 ): boolean {
-  rec.mailStatus = mailStatus;
-  if (!POSTCARD_SENT_MAIL_STATUSES.has(mailStatus.toLowerCase())) return false;
+  const now = opts.at ?? new Date().toISOString();
+  rec.mail = {
+    ...rec.mail,
+    status,
+    provider: opts.provider ?? rec.mail?.provider,
+    providerId: opts.providerId ?? rec.mail?.providerId,
+    // Stamp mailedAt on the first sent-class status; preserve it thereafter.
+    mailedAt:
+      rec.mail?.mailedAt ?? (POSTCARD_SENT_MAIL.has(status) ? now : undefined),
+    updatedAt: now,
+  };
+  if (!POSTCARD_SENT_MAIL.has(status)) return false;
   return advancePipeline(rec, "postcard-sent", {
-    note: opts.note ?? `mail:${mailStatus}`,
+    note: opts.note ?? `mail:${status}`,
     at: opts.at,
   });
 }

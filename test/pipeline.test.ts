@@ -74,14 +74,15 @@ describe("pipeline funnel transitions (Phase 6 Track A)", () => {
   it("applyMailStatus advances to postcard-sent for sent/delivered, stores status", () => {
     const rec = sampleBusiness();
     expect(applyMailStatus(rec, "delivered")).toBe(true);
-    expect(rec.mailStatus).toBe("delivered");
+    expect(rec.mail?.status).toBe("delivered");
+    expect(rec.mail?.mailedAt).toBeTruthy();
     expect(pipelineStatusOf(rec)).toBe("postcard-sent");
   });
 
-  it("applyMailStatus records a failure status without advancing the funnel", () => {
+  it("applyMailStatus records a terminal status without advancing the funnel", () => {
     const rec = sampleBusiness();
-    expect(applyMailStatus(rec, "returned_to_sender")).toBe(false);
-    expect(rec.mailStatus).toBe("returned_to_sender");
+    expect(applyMailStatus(rec, "returned")).toBe(false);
+    expect(rec.mail?.status).toBe("returned");
     expect(pipelineStatusOf(rec)).toBe("new");
   });
 

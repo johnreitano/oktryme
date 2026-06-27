@@ -51,7 +51,7 @@ export function toRow(rec: BusinessRecord): CrmRow {
     pipelineStatus: status,
     since: history.length ? history[history.length - 1].at : rec.createdAt,
     siteStatus: rec.status,
-    mailStatus: rec.mailStatus,
+    mailStatus: rec.mail?.status,
     history,
   };
 }
