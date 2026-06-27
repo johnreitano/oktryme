@@ -182,11 +182,13 @@ export default {
 
     // ---- PostGrid delivery webhook → update mail status + advance funnel ----
     // §1C attribution: maps the provider event onto the record's typed `mail`
-    // state and advances the CRM funnel to `postcard-sent` (Phase 6).
+    // state and advances the CRM funnel to `postcard-sent` (Phase 6). PostGrid
+    // can't send custom headers, so the shared secret rides in the webhook URL's
+    // `?secret=` query (header also accepted, for manual/test calls).
     if (req.method === "POST" && url.pathname === "/postgrid/webhook") {
-      const ok =
-        !env.POSTGRID_WEBHOOK_SECRET ||
-        req.headers.get("x-webhook-secret") === env.POSTGRID_WEBHOOK_SECRET;
+      const provided =
+        url.searchParams.get("secret") ?? req.headers.get("x-webhook-secret");
+      const ok = !env.POSTGRID_WEBHOOK_SECRET || provided === env.POSTGRID_WEBHOOK_SECRET;
       if (!ok) return new Response("bad secret", { status: 401 });
       const result = await handlePostgridWebhook(await req.json(), store);
       return Response.json(result);

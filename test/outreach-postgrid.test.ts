@@ -85,6 +85,19 @@ describe("handlePostgridWebhook", () => {
     expect(updated!.mail!.mailedAt).toBeTruthy();
   });
 
+  it("handles a flat event payload (postcard fields at the top level)", async () => {
+    const store = new MemoryStore();
+    const rec = sampleBusiness();
+    await store.put(rec);
+
+    const result = await handlePostgridWebhook(
+      { id: "pc_9", status: "processed_for_delivery", metadata: { handle: rec.handle } },
+      store,
+    );
+    expect(result).toMatchObject({ ok: true, handle: rec.handle, status: "in_transit" });
+    expect((await store.get(rec.handle))!.mail!.status).toBe("in_transit");
+  });
+
   it("rejects an event with no handle in metadata", async () => {
     const store = new MemoryStore();
     const res = await handlePostgridWebhook({ data: { id: "x", status: "ready" } }, store);

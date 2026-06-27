@@ -102,4 +102,21 @@ describe("POST /postgrid/webhook", () => {
     );
     expect(res.status).toBe(401);
   });
+
+  it("accepts the secret via the ?secret= query param (PostGrid's mechanism)", async () => {
+    const rec = sampleBusiness();
+    const kv = fakeKV({ [`biz:${rec.handle}`]: rec });
+    const res = await worker.fetch(
+      new Request("https://oktryme.com/postgrid/webhook?secret=right", {
+        method: "POST",
+        body: JSON.stringify({
+          type: "postcard.updated",
+          data: { id: "pc_1", status: "completed", metadata: { handle: rec.handle } },
+        }),
+      }),
+      makeEnv(kv, { POSTGRID_WEBHOOK_SECRET: "right" }),
+    );
+    expect(res.status).toBe(200);
+    expect(await res.json()).toMatchObject({ ok: true, status: "delivered" });
+  });
 });

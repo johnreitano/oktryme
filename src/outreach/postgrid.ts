@@ -81,14 +81,21 @@ export async function sendPostcard(
   return { id: body.id, status: mapPostgridStatus(body.status) };
 }
 
-/** Shape of a PostGrid webhook event (the bits we read). */
-interface PostgridWebhookEvent {
+/** The postcard fields we read from a webhook event. */
+interface PostgridPostcard {
+  id?: string;
+  status?: string;
+  metadata?: { handle?: string };
+}
+
+/**
+ * Shape of a PostGrid webhook event. PostGrid may deliver the postcard object
+ * wrapped under `data` (`{type, data:{…}}`) or flat at the top level — we read
+ * from either so we're robust to both `payloadFormat` shapes.
+ */
+interface PostgridWebhookEvent extends PostgridPostcard {
   type?: string;
-  data?: {
-    id?: string;
-    status?: string;
-    metadata?: { handle?: string };
-  };
+  data?: PostgridPostcard;
 }
 
 export interface WebhookResult {
@@ -108,18 +115,19 @@ export async function handlePostgridWebhook(
   event: unknown,
   store: Store,
 ): Promise<WebhookResult> {
-  const data = (event as PostgridWebhookEvent)?.data;
-  const handle = data?.metadata?.handle;
+  const e = (event ?? {}) as PostgridWebhookEvent;
+  const data: PostgridPostcard = e.data ?? e; // wrapped (`{data}`) or flat
+  const handle = data.metadata?.handle;
   if (!handle) return { ok: false, error: "no handle in metadata" };
 
   const rec = await store.get(handle);
   if (!rec) return { ok: false, handle, error: "unknown handle" };
 
-  const status = mapPostgridStatus(data?.status);
+  const status = mapPostgridStatus(data.status);
   applyMailStatus(rec, status, {
     provider: "postgrid",
-    providerId: data?.id,
-    note: `postgrid:${data?.status ?? "unknown"}`,
+    providerId: data.id,
+    note: `postgrid:${data.status ?? "unknown"}`,
   });
   await store.put(rec);
   return { ok: true, handle, status };
