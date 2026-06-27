@@ -37,6 +37,7 @@ bucket_name = "maps-website-builder-images"
 #   RESEND_API_KEY           re_... (V5 outbound lead email)
 #   LEADS_FROM               verified sender, e.g. "OK Try Me <leads@oktryme.com>"
 #   OPS_FALLBACK_EMAIL       inbox for leads when a business has no email on file
+#   ADMIN_TOKEN              shared secret gating /admin/* (Phase 6 CRM call queue)
 #
 # When CF_* are set, the Worker uses the real CloudflareProvisioner (V1);
 # otherwise it falls back to the StubProvisioner (V3 test runs). Likewise

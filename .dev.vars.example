@@ -24,6 +24,14 @@ LEADS_FROM="OK Try Me <leads@oktryme.com>"
 # provisioning-fallback warnings (§5a E) and done-for-you change requests (§6).
 OPS_FALLBACK_EMAIL=ops@oktryme.com
 
+# --- Phase 6 Track A: Sales CRM admin auth ---
+# Shared secret for the /admin/* call-queue routes (HTML view, JSON, manual
+# pipeline override, mail-status). Unset → /admin/* returns 503 (disabled), so
+# the lead list never leaks. Reach it via `Authorization: Bearer <token>` or
+# `?token=`. Only on the workers.dev URL — the oktryme.com proxy (§5b) doesn't
+# forward /admin. Set in prod with: wrangler secret put ADMIN_TOKEN
+ADMIN_TOKEN=choose-a-long-random-string
+
 # --- Phase 3: ingest pipeline (used by `npm run ingest`, not the Worker) ---
 OUTSCRAPER_API_KEY=xxx        # Google Maps scrape (per-record cost) — businesses pull
 GEMINI_API_KEY=xxx            # Gemini — drives BOTH AI copy (§7 #5 guardrails) and

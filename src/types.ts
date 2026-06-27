@@ -4,6 +4,42 @@
 export type SiteStatus = "preview" | "active" | "past_due" | "canceled";
 export type Plan = "self_serve" | "done_for_you";
 
+/**
+ * Sales-funnel stage for a lead (Phase 6 Track A / §6 CRM). Distinct from the
+ * site-lifecycle `status` (preview/active/…) and from `mailStatus` — those record
+ * *infrastructure* state; this records where the *lead* sits in the sales funnel:
+ *
+ *   new → postcard-sent → qr-code-visit → paid → canceled
+ *
+ * `qr-code-visit` = the lead scanned the postcard QR and opened the preview — the
+ * hot signal that drives the §1A-step-4 / §7-#9 scan→call routing. Advanced
+ * automatically by the mail/scan/Stripe signals (monotonic — re-delivery never
+ * regresses a later stage), with manual override for offline events.
+ */
+export type PipelineStatus =
+  | "new"
+  | "postcard-sent"
+  | "qr-code-visit"
+  | "paid"
+  | "canceled";
+
+/** One recorded funnel transition, for the per-handle timestamps/history view. */
+export interface PipelineEvent {
+  status: PipelineStatus;
+  /** ISO timestamp the lead entered this stage. */
+  at: string;
+  /** `auto` = driven by a mail/scan/Stripe signal; `manual` = ops override. */
+  via: "auto" | "manual";
+  /** Free-text source/reason, e.g. "qr-scan", "stripe:checkout.session.completed". */
+  note?: string;
+}
+
+/** Current funnel stage plus its append-only transition history. */
+export interface PipelineState {
+  status: PipelineStatus;
+  history: PipelineEvent[];
+}
+
 export interface Address {
   line1: string;
   line2?: string;
@@ -108,6 +144,11 @@ export interface BusinessRecord {
   /** Domain-provisioning outcome once paid (§5a). Absent before conversion. */
   provisioning?: ProvisioningStatus;
   mailStatus?: string;
+  /**
+   * Sales-funnel stage + history (Phase 6 Track A / §6 CRM). Absent = `new`
+   * (a freshly-ingested lead not yet touched by any funnel signal).
+   */
+  pipeline?: PipelineState;
   /** ISO timestamp of record creation (stamped by the store on first write). */
   createdAt?: string;
   /** ISO timestamp of the last edit (set by callers). */
@@ -122,6 +163,14 @@ export const SITE_STATUSES: SiteStatus[] = [
 ];
 
 export const PLANS: Plan[] = ["self_serve", "done_for_you"];
+
+export const PIPELINE_STATUSES: PipelineStatus[] = [
+  "new",
+  "postcard-sent",
+  "qr-code-visit",
+  "paid",
+  "canceled",
+];
 
 export const PROVISIONING_STATES: ProvisioningState[] = [
   "provisioned",

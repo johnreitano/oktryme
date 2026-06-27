@@ -8,6 +8,8 @@ import { assertBusinessRecord, validateBusinessRecord } from "./validate.js";
 export interface Store {
   get(handle: string): Promise<BusinessRecord | null>;
   put(rec: BusinessRecord): Promise<void>;
+  /** All business records (for the CRM read view / call queue, §6). */
+  list(): Promise<BusinessRecord[]>;
   resolveDomain(domain: string): Promise<string | null>;
   mapDomain(domain: string, handle: string): Promise<void>;
   /** Resolve a Stripe customer id back to a handle (dunning/cancel webhooks). */
@@ -46,6 +48,21 @@ export class KVStore implements Store {
     if (rec.stripe?.customerId) await this.mapCustomer(rec.stripe.customerId, rec.handle);
   }
 
+  async list(): Promise<BusinessRecord[]> {
+    const out: BusinessRecord[] = [];
+    let cursor: string | undefined;
+    // Page through every biz: key (KV caps list pages at 1000 keys).
+    do {
+      const page = await this.kv.list({ prefix: REC_PREFIX, cursor });
+      for (const { name } of page.keys) {
+        const rec = await this.get(name.slice(REC_PREFIX.length));
+        if (rec) out.push(rec); // get() drops corrupt records (logged there)
+      }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    return out;
+  }
+
   async resolveDomain(domain: string): Promise<string | null> {
     return this.kv.get(DOMAIN_PREFIX + domain.toLowerCase());
   }
@@ -78,6 +95,10 @@ export class MemoryStore implements Store {
     this.recs.set(rec.handle, structuredClone(rec));
     if (rec.domain) await this.mapDomain(rec.domain, rec.handle);
     if (rec.stripe?.customerId) await this.mapCustomer(rec.stripe.customerId, rec.handle);
+  }
+
+  async list(): Promise<BusinessRecord[]> {
+    return [...this.recs.values()].map((r) => structuredClone(r));
   }
 
   async resolveDomain(domain: string): Promise<string | null> {
