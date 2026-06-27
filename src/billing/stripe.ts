@@ -1,5 +1,6 @@
 import type { Store } from "../store.js";
 import type { Plan } from "../types.js";
+import { advancePipeline } from "../crm/pipeline.js";
 import {
   provisionForActivation,
   type Provisioner,
@@ -302,6 +303,8 @@ export async function handleStripeEvent(
       rec.plan =
         (obj.metadata?.plan as Plan | undefined) ??
         planForPrice(obj.metadata?.price as string | undefined, prices);
+      // CRM funnel (§6): the lead converted → `paid`.
+      advancePipeline(rec, "paid", { note: `stripe:${event.type}` });
       await store.put(rec); // also indexes customer→handle
 
       const { preferred, backups } = backupDomains(
@@ -325,6 +328,10 @@ export async function handleStripeEvent(
       const priceId = priceFromSubscription(obj);
       if (priceId) rec.plan = planForPrice(priceId, prices);
       rec.status = siteStatusForSubscription(obj.status);
+      // CRM funnel (§6): active → `paid` (covers reactivation), lapse/cancel → `canceled`.
+      advancePipeline(rec, rec.status === "active" ? "paid" : "canceled", {
+        note: `stripe:${event.type}:${obj.status ?? "?"}`,
+      });
       rec.stripe = {
         ...rec.stripe,
         customerId:
@@ -357,6 +364,8 @@ export async function handleStripeEvent(
       }
       rec.status = "active";
       if (rec.stripe) rec.stripe.subscriptionStatus = "active";
+      // CRM funnel (§6): reactivation revives a `canceled` lead back to `paid`.
+      advancePipeline(rec, "paid", { note: `stripe:${event.type}` });
       rec.updatedAt = new Date().toISOString();
       await store.put(rec);
       return { handled: true, action: "reactivated", handle };
@@ -378,6 +387,8 @@ async function transition(
   if (!rec) return { handled: false, action: "ignored", handle };
   rec.status = status;
   if (rec.stripe) rec.stripe.subscriptionStatus = status;
+  // CRM funnel (§6): both a hard cancel and a final dunning lapse → `canceled`.
+  advancePipeline(rec, "canceled", { note: `stripe:${event.type}` });
   rec.updatedAt = new Date().toISOString();
   await deps.store.put(rec);
   return { handled: true, action: status, handle };

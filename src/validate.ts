@@ -6,11 +6,13 @@
 // persist it. Hand-rolled (no dependency) to match the project's zero-dep style.
 
 import {
+  PIPELINE_STATUSES,
   PLANS,
   PROVISIONING_STATES,
   SITE_STATUSES,
   type BusinessRecord,
   type Plan,
+  type PipelineStatus,
   type ProvisioningState,
   type SiteStatus,
 } from "./types.js";
@@ -64,6 +66,7 @@ function check(input: unknown, issues: string[]): void {
   checkImages(rec.images, issues);
   checkStripe(rec.stripe, issues);
   checkProvisioning(rec.provisioning, issues);
+  checkPipeline(rec.pipeline, issues);
 }
 
 function checkProfile(input: unknown, issues: string[]): void {
@@ -176,6 +179,36 @@ function checkProvisioning(input: unknown, issues: string[]): void {
   if (p.attempts !== undefined && typeof p.attempts !== "number") {
     issues.push("provisioning.attempts must be a number");
   }
+}
+
+function checkPipeline(input: unknown, issues: string[]): void {
+  if (input === undefined) return; // optional (absent = "new")
+  if (!isObject(input)) {
+    issues.push("pipeline must be an object");
+    return;
+  }
+  const p = input as Record<string, unknown>;
+  reqEnum(p, "status", PIPELINE_STATUSES as readonly PipelineStatus[], issues);
+  checkArray(p.history, "pipeline.history", issues, checkPipelineEvent);
+}
+
+function checkPipelineEvent(input: unknown, issues: string[], path: string): void {
+  if (!isObject(input)) {
+    issues.push(`${path} must be an object`);
+    return;
+  }
+  const e = input as Record<string, unknown>;
+  if (
+    typeof e.status !== "string" ||
+    !(PIPELINE_STATUSES as readonly string[]).includes(e.status)
+  ) {
+    issues.push(`${path}.status must be one of: ${PIPELINE_STATUSES.join(", ")}`);
+  }
+  reqString(e, "at", issues, `${path}.at`);
+  if (e.via !== "auto" && e.via !== "manual") {
+    issues.push(`${path}.via must be "auto" or "manual"`);
+  }
+  optString(e, "note", issues, `${path}.note`);
 }
 
 // --- primitives --------------------------------------------------------------

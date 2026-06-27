@@ -19,7 +19,17 @@ import {
   type OpsNotifier,
 } from "./notify/ops.js";
 import { handleDfyRequest } from "./dfy/intake.js";
-import type { Plan } from "./types.js";
+import {
+  advancePipeline,
+  applyMailStatus,
+  setPipelineManual,
+} from "./crm/pipeline.js";
+import { renderCrm, buildQueue, statusCounts } from "./crm/view.js";
+import {
+  PIPELINE_STATUSES,
+  type Plan,
+  type PipelineStatus,
+} from "./types.js";
 
 export interface Env {
   BUSINESS_KV: KVNamespace;
@@ -40,10 +50,34 @@ export interface Env {
   RESEND_API_KEY?: string;
   LEADS_FROM?: string;
   OPS_FALLBACK_EMAIL?: string;
+  // Sales CRM admin auth (Phase 6 Track A). When unset, /admin/* is disabled
+  // (503) so the call queue never leaks. Reached only on the workers.dev URL —
+  // the oktryme.com reverse-proxy (§5b) does not forward /admin.
+  ADMIN_TOKEN?: string;
+}
+
+/**
+ * Gate an /admin request behind ADMIN_TOKEN (bearer header or `?token=`).
+ * Returns a Response to short-circuit (disabled/unauthorized), or null to allow.
+ */
+function guardAdmin(req: Request, url: URL, env: Env): Response | null {
+  if (!env.ADMIN_TOKEN) return new Response("admin disabled", { status: 503 });
+  const bearer = req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+  const token = bearer || url.searchParams.get("token") || "";
+  // Length-prefixed compare is fine here (token is a shared secret, not user input).
+  if (token !== env.ADMIN_TOKEN) return new Response("unauthorized", { status: 401 });
+  return null;
 }
 
 function nowSec(): number {
   return Math.floor(Date.now() / 1000);
+}
+
+/** Narrow an untrusted string to a PipelineStatus (else undefined = "all"). */
+function parseStatus(raw: string | null): PipelineStatus | undefined {
+  return raw && (PIPELINE_STATUSES as readonly string[]).includes(raw)
+    ? (raw as PipelineStatus)
+    : undefined;
 }
 
 /** Real Cloudflare provisioner when creds are present, else the stub (V3). */
@@ -135,6 +169,60 @@ export default {
       return Response.json(result);
     }
 
+    // ---- Sales CRM (Phase 6 Track A / §6) — token-guarded admin call queue ----
+    if (url.pathname.startsWith("/admin/")) {
+      const denied = guardAdmin(req, url, env);
+      if (denied) return denied;
+
+      // Read view: list/filter businesses by pipeline_status (the call queue).
+      if (req.method === "GET" && url.pathname === "/admin/crm.json") {
+        const filter = parseStatus(url.searchParams.get("status"));
+        const records = await store.list();
+        return Response.json({
+          counts: statusCounts(records),
+          rows: buildQueue(records, filter),
+        });
+      }
+      if (req.method === "GET" && url.pathname === "/admin/crm") {
+        const filter = parseStatus(url.searchParams.get("status"));
+        const records = await store.list();
+        return new Response(
+          renderCrm(records, { filter, previewHost: env.PREVIEW_HOST }),
+          { headers: { "content-type": "text/html;charset=utf-8" } },
+        );
+      }
+
+      // Manual override for offline events (a phone close, a correction, §6).
+      const pipeMatch = url.pathname.match(/^\/admin\/pipeline\/([^/]+)$/);
+      if (req.method === "POST" && pipeMatch) {
+        const rec = await store.get(pipeMatch[1]);
+        if (!rec) return new Response("Not found", { status: 404 });
+        const form = await req.formData();
+        const status = parseStatus(form.get("status")?.toString() ?? null);
+        if (!status) return new Response("invalid status", { status: 400 });
+        const note = form.get("note")?.toString();
+        setPipelineManual(rec, status, { note: note || "manual override" });
+        await store.put(rec);
+        return Response.json({ handle: rec.handle, pipeline: rec.pipeline });
+      }
+
+      // Record a mail-provider status (Phase-5 webhook reuses applyMailStatus);
+      // a send/in-transit/delivered status advances the funnel to postcard-sent.
+      const mailMatch = url.pathname.match(/^\/admin\/mail\/([^/]+)$/);
+      if (req.method === "POST" && mailMatch) {
+        const rec = await store.get(mailMatch[1]);
+        if (!rec) return new Response("Not found", { status: 404 });
+        const form = await req.formData();
+        const status = form.get("status")?.toString();
+        if (!status) return new Response("missing status", { status: 400 });
+        applyMailStatus(rec, status);
+        await store.put(rec);
+        return Response.json({ handle: rec.handle, pipeline: rec.pipeline, mailStatus: rec.mailStatus });
+      }
+
+      return new Response("Not found", { status: 404 });
+    }
+
     // ---- Convert: preview CTA → Stripe Checkout ----
     // `?plan=done_for_you` selects the $99 tier; default is $49 self-serve (§5a A).
     const convertMatch = url.pathname.match(/^\/convert\/([^/]+)$/);
@@ -213,7 +301,17 @@ export default {
     const scanMatch = url.pathname.match(/^\/r\/([^/]+)$/);
     if (req.method === "GET" && scanMatch) {
       const handle = scanMatch[1];
-      // TODO: log scan event (handle, ts, UA) for attribution (§1C).
+      // The scan is the channel's conversion event (§1C): advance the CRM funnel
+      // to `qr-code-visit` — the hot signal that feeds the scan→call queue (§7 #9).
+      // Best-effort: a store hiccup must never block the redirect to the preview.
+      try {
+        const rec = await store.get(handle);
+        if (rec && advancePipeline(rec, "qr-code-visit", { note: "qr-scan" })) {
+          await store.put(rec);
+        }
+      } catch (err) {
+        console.error(`scan pipeline update failed for ${handle}: ${err}`);
+      }
       return Response.redirect(`https://${env.PREVIEW_HOST}/p/${handle}`, 302);
     }
 
