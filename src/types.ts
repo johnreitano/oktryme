@@ -6,8 +6,9 @@ export type Plan = "self_serve" | "done_for_you";
 
 /**
  * Sales-funnel stage for a lead (Phase 6 Track A / §6 CRM). Distinct from the
- * site-lifecycle `status` (preview/active/…) and from `mailStatus` — those record
- * *infrastructure* state; this records where the *lead* sits in the sales funnel:
+ * site-lifecycle `status` (preview/active/…) and from the postcard `mail` state —
+ * those record *infrastructure* state; this records where the *lead* sits in the
+ * sales funnel:
  *
  *   new → postcard-sent → qr-code-visit → paid → canceled
  *
@@ -39,6 +40,21 @@ export interface PipelineState {
   status: PipelineStatus;
   history: PipelineEvent[];
 }
+
+/**
+ * Postcard outreach lifecycle (§1C of PLAN.md), driven by the batch-send script
+ * and the print-provider delivery webhooks:
+ * `queued` (built, not yet handed to the provider) → `mailed` (accepted by the
+ * provider) → `in_transit` → `delivered` | `returned` | `failed`. Final USPS
+ * delivery confirmation is best-effort (depends on provider tracking).
+ */
+export type MailStatus =
+  | "queued"
+  | "mailed"
+  | "in_transit"
+  | "delivered"
+  | "returned"
+  | "failed";
 
 export interface Address {
   line1: string;
@@ -114,6 +130,34 @@ export interface ProvisioningStatus {
   updatedAt?: string;
 }
 
+/**
+ * Postcard mailing state for a business (§1C). Keyed by `handle` like everything
+ * else; `providerId` is the print provider's postcard id — used both for
+ * idempotency (don't re-mail a handle that already has one) and to correlate
+ * inbound delivery webhooks back to the record.
+ */
+export interface MailingStatus {
+  status: MailStatus;
+  /** Print provider name, e.g. "postgrid". */
+  provider?: string;
+  /** Provider-side postcard id (idempotency + webhook correlation). */
+  providerId?: string;
+  /** ISO timestamp the postcard was accepted by the provider. */
+  mailedAt?: string;
+  /** ISO timestamp of the last status change. */
+  updatedAt?: string;
+  /** Last error message when a send failed. */
+  lastError?: string;
+}
+
+/** One QR-scan hit on `/r/{handle}` — the conversion event for the channel (§1C). */
+export interface ScanEvent {
+  /** ISO timestamp of the scan. */
+  at: string;
+  /** Requesting user-agent, when present. */
+  ua?: string;
+}
+
 export interface BusinessProfile {
   name: string;
   ownerName?: string;
@@ -143,7 +187,8 @@ export interface BusinessRecord {
   stripe?: StripeLink;
   /** Domain-provisioning outcome once paid (§5a). Absent before conversion. */
   provisioning?: ProvisioningStatus;
-  mailStatus?: string;
+  /** Postcard outreach state (§1C). Absent until the batch-send script runs. */
+  mail?: MailingStatus;
   /**
    * Sales-funnel stage + history (Phase 6 Track A / §6 CRM). Absent = `new`
    * (a freshly-ingested lead not yet touched by any funnel signal).
@@ -176,4 +221,13 @@ export const PROVISIONING_STATES: ProvisioningState[] = [
   "provisioned",
   "fallback",
   "pending",
+];
+
+export const MAIL_STATUSES: MailStatus[] = [
+  "queued",
+  "mailed",
+  "in_transit",
+  "delivered",
+  "returned",
+  "failed",
 ];

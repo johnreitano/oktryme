@@ -6,11 +6,13 @@
 // persist it. Hand-rolled (no dependency) to match the project's zero-dep style.
 
 import {
+  MAIL_STATUSES,
   PIPELINE_STATUSES,
   PLANS,
   PROVISIONING_STATES,
   SITE_STATUSES,
   type BusinessRecord,
+  type MailStatus,
   type Plan,
   type PipelineStatus,
   type ProvisioningState,
@@ -56,7 +58,6 @@ function check(input: unknown, issues: string[]): void {
   reqEnum(rec, "status", SITE_STATUSES as readonly SiteStatus[], issues);
   reqEnum(rec, "plan", PLANS as readonly Plan[], issues);
   optString(rec, "domain", issues);
-  optString(rec, "mailStatus", issues);
   optString(rec, "createdAt", issues);
   optString(rec, "updatedAt", issues);
 
@@ -66,7 +67,23 @@ function check(input: unknown, issues: string[]): void {
   checkImages(rec.images, issues);
   checkStripe(rec.stripe, issues);
   checkProvisioning(rec.provisioning, issues);
+  checkMail(rec.mail, issues);
   checkPipeline(rec.pipeline, issues);
+}
+
+function checkMail(input: unknown, issues: string[]): void {
+  if (input === undefined) return; // optional (absent until the postcard send)
+  if (!isObject(input)) {
+    issues.push("mail must be an object");
+    return;
+  }
+  const m = input as Record<string, unknown>;
+  reqEnum(m, "status", MAIL_STATUSES as readonly MailStatus[], issues);
+  optString(m, "provider", issues, "mail.provider");
+  optString(m, "providerId", issues, "mail.providerId");
+  optString(m, "mailedAt", issues, "mail.mailedAt");
+  optString(m, "updatedAt", issues, "mail.updatedAt");
+  optString(m, "lastError", issues, "mail.lastError");
 }
 
 function checkProfile(input: unknown, issues: string[]): void {

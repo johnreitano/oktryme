@@ -1,4 +1,4 @@
-import type { BusinessRecord } from "./types.js";
+import type { BusinessRecord, ScanEvent } from "./types.js";
 import { assertBusinessRecord, validateBusinessRecord } from "./validate.js";
 
 /**
@@ -15,11 +15,16 @@ export interface Store {
   /** Resolve a Stripe customer id back to a handle (dunning/cancel webhooks). */
   resolveCustomer(customerId: string): Promise<string | null>;
   mapCustomer(customerId: string, handle: string): Promise<void>;
+  /** Append-only QR-scan log for postcard attribution (§1C). */
+  logScan(handle: string, event: ScanEvent): Promise<void>;
+  /** All scan events for a handle (attribution / Phase-6 call queue). */
+  getScans(handle: string): Promise<ScanEvent[]>;
 }
 
 const REC_PREFIX = "biz:";
 const DOMAIN_PREFIX = "domain:";
 const CUSTOMER_PREFIX = "customer:";
+const SCAN_PREFIX = "scan:";
 
 /** Cloudflare KV-backed store (production). */
 export class KVStore implements Store {
@@ -78,6 +83,28 @@ export class KVStore implements Store {
   async mapCustomer(customerId: string, handle: string): Promise<void> {
     await this.kv.put(CUSTOMER_PREFIX + customerId, handle);
   }
+
+  // Each scan is its own key (`scan:{handle}:{ts}:{rand}`) so concurrent hits
+  // never race on a read-modify-write counter; the count is the list size.
+  async logScan(handle: string, event: ScanEvent): Promise<void> {
+    const key = `${SCAN_PREFIX}${handle}:${event.at}:${crypto.randomUUID()}`;
+    await this.kv.put(key, JSON.stringify(event));
+  }
+
+  async getScans(handle: string): Promise<ScanEvent[]> {
+    const prefix = `${SCAN_PREFIX}${handle}:`;
+    const events: ScanEvent[] = [];
+    let cursor: string | undefined;
+    do {
+      const page = await this.kv.list({ prefix, cursor });
+      for (const { name } of page.keys) {
+        const raw = await this.kv.get(name, "json");
+        if (raw) events.push(raw as ScanEvent);
+      }
+      cursor = page.list_complete ? undefined : page.cursor;
+    } while (cursor);
+    return events.sort((a, b) => a.at.localeCompare(b.at));
+  }
 }
 
 /** In-memory store for tests and local spikes. */
@@ -85,6 +112,7 @@ export class MemoryStore implements Store {
   private recs = new Map<string, BusinessRecord>();
   private domains = new Map<string, string>();
   private customers = new Map<string, string>();
+  private scans = new Map<string, ScanEvent[]>();
 
   async get(handle: string): Promise<BusinessRecord | null> {
     const rec = this.recs.get(handle);
@@ -115,5 +143,17 @@ export class MemoryStore implements Store {
 
   async mapCustomer(customerId: string, handle: string): Promise<void> {
     this.customers.set(customerId, handle);
+  }
+
+  async logScan(handle: string, event: ScanEvent): Promise<void> {
+    const list = this.scans.get(handle) ?? [];
+    list.push({ ...event });
+    this.scans.set(handle, list);
+  }
+
+  async getScans(handle: string): Promise<ScanEvent[]> {
+    return (this.scans.get(handle) ?? [])
+      .map((e) => ({ ...e }))
+      .sort((a, b) => a.at.localeCompare(b.at));
   }
 }

@@ -44,6 +44,15 @@ function makeEnv(overrides: Record<string, unknown> = {}) {
   } as any;
 }
 
+// ctx mock that lets a test await waitUntil work (scan logging + funnel advance).
+function makeCtx() {
+  const ps: Promise<unknown>[] = [];
+  return {
+    waitUntil: (p: Promise<unknown>) => ps.push(p),
+    settle: () => Promise.all(ps),
+  };
+}
+
 async function seed(env: any, ...recs: BusinessRecord[]) {
   const store = new KVStore(env.BUSINESS_KV);
   for (const r of recs) await store.put(r);
@@ -170,7 +179,7 @@ describe("CRM manual override + mail status routes", () => {
     );
     expect(res.status).toBe(200);
     const rec = await store.get("joes-auto");
-    expect(rec!.mailStatus).toBe("delivered");
+    expect(rec!.mail?.status).toBe("delivered");
     expect(pipelineStatusOf(rec!)).toBe("postcard-sent");
   });
 });
@@ -179,12 +188,15 @@ describe("QR scan advances the funnel (§1C/§6)", () => {
   it("/r/{handle} flips the lead to qr-code-visit and 302s to the preview", async () => {
     const env = makeEnv();
     const store = await seed(env, sampleBusiness());
+    const ctx = makeCtx();
     const res = await worker.fetch(
       new Request("https://oktryme.com/r/joes-auto"),
       env,
+      ctx as any,
     );
     expect(res.status).toBe(302);
     expect(res.headers.get("location")).toBe("https://oktryme.com/p/joes-auto");
+    await ctx.settle(); // scan logging + funnel advance run in waitUntil
     expect(pipelineStatusOf((await store.get("joes-auto"))!)).toBe("qr-code-visit");
   });
 

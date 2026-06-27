@@ -25,6 +25,8 @@ import {
   setPipelineManual,
 } from "./crm/pipeline.js";
 import { renderCrm, buildQueue, statusCounts } from "./crm/view.js";
+import { renderQrSvg, scanUrl } from "./outreach/qr.js";
+import { handlePostgridWebhook, mapPostgridStatus } from "./outreach/postgrid.js";
 import {
   PIPELINE_STATUSES,
   type Plan,
@@ -54,6 +56,9 @@ export interface Env {
   // (503) so the call queue never leaks. Reached only on the workers.dev URL —
   // the oktryme.com reverse-proxy (§5b) does not forward /admin.
   ADMIN_TOKEN?: string;
+  // PostGrid postcard outreach (Phase 5, §1C). The API key lives in the batch
+  // script's env, not the Worker; the Worker only needs the webhook secret.
+  POSTGRID_WEBHOOK_SECRET?: string;
 }
 
 /**
@@ -123,8 +128,14 @@ function buildOps(env: Env): OpsNotifier {
  * the convert→Checkout flow, and handles Stripe webhooks.
  */
 export default {
-  async fetch(req: Request, env: Env): Promise<Response> {
+  async fetch(req: Request, env: Env, ctx?: ExecutionContext): Promise<Response> {
     const url = new URL(req.url);
+    // Background work (e.g. scan logging) survives the response via waitUntil;
+    // tests invoke fetch without a ctx, so fall back to awaiting inline.
+    const background = (p: Promise<unknown>): void => {
+      if (ctx) ctx.waitUntil(p);
+      else void p;
+    };
     const store = new KVStore(env.BUSINESS_KV);
     const host = url.hostname;
     const isPreviewHost =
@@ -169,6 +180,18 @@ export default {
       return Response.json(result);
     }
 
+    // ---- PostGrid delivery webhook → update mail status + advance funnel ----
+    // §1C attribution: maps the provider event onto the record's typed `mail`
+    // state and advances the CRM funnel to `postcard-sent` (Phase 6).
+    if (req.method === "POST" && url.pathname === "/postgrid/webhook") {
+      const ok =
+        !env.POSTGRID_WEBHOOK_SECRET ||
+        req.headers.get("x-webhook-secret") === env.POSTGRID_WEBHOOK_SECRET;
+      if (!ok) return new Response("bad secret", { status: 401 });
+      const result = await handlePostgridWebhook(await req.json(), store);
+      return Response.json(result);
+    }
+
     // ---- Sales CRM (Phase 6 Track A / §6) — token-guarded admin call queue ----
     if (url.pathname.startsWith("/admin/")) {
       const denied = guardAdmin(req, url, env);
@@ -206,8 +229,9 @@ export default {
         return Response.json({ handle: rec.handle, pipeline: rec.pipeline });
       }
 
-      // Record a mail-provider status (Phase-5 webhook reuses applyMailStatus);
-      // a send/in-transit/delivered status advances the funnel to postcard-sent.
+      // Record a mail-provider status (manual/ops entry). The provider string is
+      // mapped to our typed MailStatus, stored on `mail`, and a send/in-transit/
+      // delivered status advances the funnel to postcard-sent.
       const mailMatch = url.pathname.match(/^\/admin\/mail\/([^/]+)$/);
       if (req.method === "POST" && mailMatch) {
         const rec = await store.get(mailMatch[1]);
@@ -215,9 +239,10 @@ export default {
         const form = await req.formData();
         const status = form.get("status")?.toString();
         if (!status) return new Response("missing status", { status: 400 });
-        applyMailStatus(rec, status);
+        // Tolerant of raw provider vocab or our own enum — both map to MailStatus.
+        applyMailStatus(rec, mapPostgridStatus(status), { note: "manual" });
         await store.put(rec);
-        return Response.json({ handle: rec.handle, pipeline: rec.pipeline, mailStatus: rec.mailStatus });
+        return Response.json({ handle: rec.handle, pipeline: rec.pipeline, mail: rec.mail });
       }
 
       return new Response("Not found", { status: 404 });
@@ -297,22 +322,48 @@ export default {
         : new Response(res.error, { status: 400 });
     }
 
-    // ---- QR scan redirect (log scan → preview). QR image gen is a later spike. ----
+    // ---- QR scan redirect: log the scan (the channel's conversion event, §1C)
+    //      then 302 to the preview. The KV write runs in waitUntil so the
+    //      redirect is instant — a slow log must never make a warm lead wait. ----
     const scanMatch = url.pathname.match(/^\/r\/([^/]+)$/);
     if (req.method === "GET" && scanMatch) {
       const handle = scanMatch[1];
-      // The scan is the channel's conversion event (§1C): advance the CRM funnel
-      // to `qr-code-visit` — the hot signal that feeds the scan→call queue (§7 #9).
-      // Best-effort: a store hiccup must never block the redirect to the preview.
-      try {
-        const rec = await store.get(handle);
-        if (rec && advancePipeline(rec, "qr-code-visit", { note: "qr-scan" })) {
-          await store.put(rec);
-        }
-      } catch (err) {
-        console.error(`scan pipeline update failed for ${handle}: ${err}`);
-      }
+      // The scan is the channel's conversion event (§1C). Do two things, both in
+      // the background so a slow store never makes a warm lead wait for the
+      // redirect: (1) log the scan event for attribution (§1C); (2) advance the
+      // CRM funnel to `qr-code-visit` — the hot signal feeding the scan→call
+      // queue (§7 #9). Best-effort: errors are logged, never surfaced.
+      background(
+        (async () => {
+          try {
+            await store.logScan(handle, {
+              at: new Date().toISOString(),
+              ua: req.headers.get("user-agent") ?? undefined,
+            });
+            const rec = await store.get(handle);
+            if (rec && advancePipeline(rec, "qr-code-visit", { note: "qr-scan" })) {
+              await store.put(rec);
+            }
+          } catch (err) {
+            console.error(`scan handling failed for ${handle}: ${err}`);
+          }
+        })(),
+      );
       return Response.redirect(`https://${env.PREVIEW_HOST}/p/${handle}`, 302);
+    }
+
+    // ---- QR image: scannable SVG of the /r/{handle} short link (§1C).
+    //      Referenced by the postcard's `qr_url` merge var; cached at the edge. ----
+    const qrMatch = url.pathname.match(/^\/qr\/([^/]+?)(?:\.svg)?$/);
+    if (req.method === "GET" && qrMatch && url.pathname.startsWith("/qr/")) {
+      const handle = qrMatch[1];
+      const svg = renderQrSvg(scanUrl(env.PREVIEW_HOST, handle));
+      return new Response(svg, {
+        headers: {
+          "content-type": "image/svg+xml;charset=utf-8",
+          "cache-control": "public, max-age=86400",
+        },
+      });
     }
 
     // ---- Site imagery from R2 (category stock / AI-generated / uploads) ----

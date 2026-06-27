@@ -190,7 +190,7 @@ Both Lob and PostGrid are API-first with Handlebars templates, merge variables, 
 ### QR code → preview (with scan tracking)
 - QR encodes a **branded short link on our Worker**: `https://oktryme.com/r/{handle}`. Reasons: cleaner card, lets us **count scans**, and decouples the card from the underlying preview path.
 - Worker route **`GET /r/{handle}`** → logs the scan (handle, timestamp, UA) → **302 redirects** to the preview `oktryme.com/p/{handle}`.
-- Worker route **`GET /qr/{handle}.png`** → renders the QR image for that handle's short link on the fly (template just references `{{qr_url}}` = `https://oktryme.com/qr/{handle}.png`). No pre-generating/hosting thousands of images.
+- Worker route **`GET /qr/{handle}.svg`** → renders the QR image for that handle's short link on the fly (template just references `{{qr_url}}` = `https://oktryme.com/qr/{handle}.svg`). No pre-generating/hosting thousands of images. _(Shipped as **SVG**, not PNG — vector prints razor-sharp at any postcard DPI and is a fraction of the bytes; the extension-less `/qr/{handle}` also works.)_
 - **Scan = the conversion event** for this channel; ties straight through to the Stripe checkout + provisioning flow (§5).
 
 ### Batch send flow
@@ -201,7 +201,7 @@ business list (from data store, by handle)
            to:   { name, business_name, address_line1/2, city, state, zip }   ← from Outscraper
            from: <our return address>
            front/back: <template id> + merge vars { business_name, category, city,
-                        qr_url=/qr/{handle}.png, preview_short_url=/r/{handle} }
+                        qr_url=/qr/{handle}.svg, preview_short_url=/r/{handle} }
            size: 4x6
    └─► provider verifies address, prints, mails
    └─► webhooks (in_transit / delivered / returned) ─► data store logs status by handle
@@ -444,7 +444,7 @@ Cheap end-to-end proofs before pipeline build:
 | **2 — Site Worker + templates** | 1.5–2.5 | ✅ **Complete (2026-06-24)** — 3 trade variants (auto / HVAC / landscaping) + universal fallback, CSS-placeholder imagery, R2 serve pipeline (`/img/{key}`), accessible form labels, `www→apex` 301 redirect. **AI imagery generation deferred to Phase 3** (incl. crafting the specialized per-trade prompt) via **Google Nano Banana Pro** (Gemini API) — placeholders ship now, R2 ready to receive assets |
 | **3 — Discovery + ingest + copy** | 1.5–2.5 | all net-new: Step-0 analysis, Outscraper ingest, filters, AI copy + guardrails. **Also: per-trade image generation** (Nano Banana Pro / Gemini API) replacing the Phase-2 CSS placeholders — including **crafting the specialized per-trade image prompt** |
 | **4 — Billing + provisioning** | 1.5–2 | ✅ **Complete (2026-06-25, test-mode)** — Checkout tiers + portal, Stripe Tax, webhook hardening, provisioning fallback, DFY intake. Live activation = operational follow-on |
-| **5 — Postcard outreach** | 1–1.5 (dev) | + Phase 5a validation test = operational/calendar time, not dev-days |
+| **5 — Postcard outreach** | 1–1.5 (dev) | ✅ **dev complete (2026-06-27)** — PostGrid templates + idempotent batch-send + QR/scan routes + webhook. Phase 5a validation test = operational/calendar time, not dev-days |
 | **6 — Sales CRM + template v2** | 2–3 | **runs in parallel with Phase 5** (no dependency on the mail send) — funnel-status CRM (scan→call routing, §7 #9) + template-system v2 (switchable templates, per-category template sets, image-provenance guard, §7 #2) |
 | **7 — AI chat editor** | 2.5–4 | largest: net-new **auth + first frontend** + agent loop (edit core exists from V4) |
 
@@ -493,11 +493,11 @@ Cheap end-to-end proofs before pipeline build:
   - [x] **`oktryme.com` serving (§5b "Phase B") — zone-move abandoned → reverse-proxy. ✅ Done (2026-06-26).** _Zone cleanup: registered `pickle-tech.com` + moved `prod/staging.pickle` off `oktryme.com`, deleted obsolete records (tunnels/blog/GoDaddy), kept brand records (apex+www landing, Email Routing, Resend)._ The old-account `oktryme-landing` Worker (`landing/` in the repo) now **serves landing at `/` and reverse-proxies** `/p/ /r/ /qr/ /convert/ /lead/ /dfy/ /portal/ /img/` → `maps-website-builder.oktrymedigital.workers.dev` — previews/QR resolve on the brand domain with **no zone move, no 30-day lock, no downtime**. Verified live: `oktryme.com/p/{handle}` renders, `/r/{handle}` 302→`/p/`, landing at `/`. (`/stripe/webhook` stays direct to the main Worker's `workers.dev` URL.)
   - [ ] **Option B — first real live conversion (deferred; do before/with first real customer).** Everything above is wired & verified in live mode (see the Phase-4 note); the one thing not yet exercised is a real purchase. Run **one real end-to-end conversion** — real Checkout with a real card (~$49/mo to our own Stripe, cancel/refund after) → webhook → `preview→active` → **real Cloudflare domain registration (~$14/yr, auto-renews — needs budget OK)** → custom-domain attach → live over TLS — to prove the full chain in production. Ideally fold this into the **first real Phase-5 postcard lead** so the domain isn't a throwaway. Previews/QR already resolve on the brand domain (the reverse-proxy above is shipped), so Option B can run whenever — ideally on the first real Phase-5 lead.
 
-- [ ] **Phase 5 — Postcard outreach (§1C).** PostGrid/Lob templates + batch-send + QR/tracking + attribution.
-  - [ ] Postcard front/back templates (merge vars + QR)
-  - [ ] Batch-send script (idempotent by `handle`) + delivery webhooks → `mail_status`
-  - [ ] QR/tracking routes (`/r/{handle}` scan log, `/qr/{handle}.png`)
-  - [ ] **Phase 5a — gating ~2–5k-postcard validation test** (§7 #8), run *before* any scale spend (operational/calendar time, not dev-days)
+- [~] **Phase 5 — Postcard outreach (§1C).** ✅ **Dev complete & test-verified (2026-06-27, PostGrid, test-mode/$0).** 166 tests green, `typecheck` + `wrangler deploy --dry-run` clean. Provider = **PostGrid** (§1C pick); QR served as **SVG** (vector → sharper print, tiny bytes — supersedes the `.png` plan). _Remaining = Phase 5a, operational (mailing spend + a larger ingest pull)._
+  - [x] Postcard front/back templates (merge vars + QR) — `src/outreach/postcard.ts`: §1C five-var contract (`business_name`/`category`/`city`/`qr_url`/`preview_short_url`), local `{{var}}` render, 4×6 front (hero + QR) / back (value + short URL + P.S.), `buildPostcardPayload` + `isMailable` (idempotency by `handle`)
+  - [x] Batch-send script (idempotent by `handle`) + delivery webhook → typed `mail` status — `scripts/postcards.ts` (`npm run postcards`, dry-run default, `--live` gated by API key + non-placeholder return address); `POST /postgrid/webhook` (secret-guarded) → `mapPostgridStatus` → record `mail`. `MailStatus` enum + `MailingStatus` replace the old loose `mailStatus?: string`
+  - [x] QR/tracking routes — `GET /r/{handle}` logs the scan (KV append-only `scan:` keys, via `waitUntil`) then 302→preview; `GET /qr/{handle}(.svg)` renders a scannable QR of the `/r` short link (`src/outreach/qr.ts`, `qrcode-generator`)
+  - [ ] **Phase 5a — gating ~2–5k-postcard validation test** (§7 #8), run *before* any scale spend (operational/calendar time, not dev-days). _Prereq: scale the Outscraper pull — only ~16 no-site survivors in KV today (§3 follow-on)._
 
 - [ ] **Phase 6 — Sales CRM + template system v2.** Can proceed **in parallel with Phase 5** — neither track depends on the postcard send itself, so this is a second workstream alongside outreach. Two independent tracks:
   - **Track A — Sales CRM (funnel-status pipeline; delivers the CRM §7 #9 calls for). ✅ Complete (2026-06-26).** A per-business **sales-funnel status**, kept distinct from the site-lifecycle `status` (preview/active/canceled, §2/§3a) and from `mail_status` — those record *infrastructure* state; this records where the *lead* is in the sales funnel:
