@@ -33,8 +33,10 @@ OPS_FALLBACK_EMAIL=ops@oktryme.com
 ADMIN_TOKEN=choose-a-long-random-string
 
 # --- Phase 5: postcard outreach (§1C) ---
-# Worker secret: guards POST /postgrid/webhook (set `x-webhook-secret` on the
-# PostGrid webhook to this value). Set in prod via `wrangler secret put`.
+# Worker secret: guards POST /postgrid/webhook. PostGrid can't send custom
+# headers, so register the webhook URL with this value in the query string
+# (`…/postgrid/webhook?secret=<this>`); the Worker checks it. Set in prod via
+# `wrangler secret put POSTGRID_WEBHOOK_SECRET`.
 POSTGRID_WEBHOOK_SECRET=some_random_string
 # Used by `npm run postcards` (the batch-send script), NOT the Worker:
 POSTGRID_API_KEY=test_sk_xxx      # PostGrid test-mode key (sandbox = $0); live key only for real mail
