@@ -3,6 +3,7 @@ dist/
 .wrangler/
 coverage/
 ingest-output/
+discovery-output/
 .dev.vars
 *.log
 .DS_Store
